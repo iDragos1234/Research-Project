@@ -154,7 +154,7 @@ cython_debug/
 
 # Do not push DICOM files or other privacy sensitive data
 *.dcm
-*.pts
+.pts
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
