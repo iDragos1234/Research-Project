@@ -16,7 +16,7 @@ FILENAME_PATTERNS = {
 }
 
 
-type DicomMetaData = tuple[str, str, str, str, str]
+DicomMetaData = tuple[str, str, str, str, str]
 
 class ListDicomFilesMetadata:
 
@@ -24,7 +24,11 @@ class ListDicomFilesMetadata:
         return ListDicomFilesMetadata._get_dicom_files_metadata(data_folder_path)
 
     @staticmethod
-    def _get_dicom_file_metadata(dataset_name: str, dicom_file_path: str) -> DicomMetaData:
+    def _get_dicom_file_metadata(
+        dataset_name: str, 
+        visit: str, 
+        dicom_file_path: str
+    ) -> DicomMetaData:
 
         # Normalize file path
         dicom_file_path = os.path.normpath(dicom_file_path)
@@ -40,6 +44,8 @@ class ListDicomFilesMetadata:
         match = filename_regex.match(dicom_file_name)
         if match:
             subject_id, subject_visit = match.group('subject_id', 'subject_visit')
+            assert visit == subject_visit, \
+                f'Visit specified in directory name different from visit specified in file name: {visit} =/= {subject_visit}.'
             return dicom_file_path, points_file_path, dataset_name, subject_id, subject_visit
         raise RuntimeError('Filename pattern not recognized.')
 
@@ -49,10 +55,10 @@ class ListDicomFilesMetadata:
         
         dicom_files_metadata: list[DicomMetaData] = []
         for dataset_name in os.listdir(data_folder_path):
-            for dicom_file_path in glob.glob(f'{data_folder_path}/{dataset_name}/*.dcm'):
-                dicom_files_metadata.append(
-                    ListDicomFilesMetadata._get_dicom_file_metadata(dataset_name, dicom_file_path)
-                )
+            for subject_visit in os.listdir(f'{data_folder_path}/{dataset_name}'):
+                for dicom_file_path in glob.glob(f'{data_folder_path}/{dataset_name}/{subject_visit}/*.dcm'):
+                    dicom_files_metadata.append(
+                        ListDicomFilesMetadata._get_dicom_file_metadata(dataset_name, subject_visit, dicom_file_path)
+                    )
 
         return dicom_files_metadata
-    

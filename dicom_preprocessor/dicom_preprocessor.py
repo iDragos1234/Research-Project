@@ -3,13 +3,13 @@ Code adapted from `example-preprocessing-code/convert_for_localization.py`.
 
 How to run: execute the following command in the bash terminal:
 ```
-python ./image_loader/dicom_preprocessor.py --input "./data" --output "output.h5" --target-pixel-spacing 1
+python ./dicom_preprocessor/dicom_preprocessor.py --input "./data" --output "output.h5" --target-pixel-spacing 1
 ```
 """
 import h5py, argparse, tqdm
 
 from list_dicom_files_metadata import ListDicomFilesMetadata
-import dicom_transforms as dt
+import dicom_transformations as dt
 
 
 class DicomPreprocessor:
@@ -41,7 +41,7 @@ class DicomPreprocessor:
         with h5py.File(hdf5_file_path, 'w') as hdf5_file_object:
             
             # DICOM transforms: preprocess each DICOM file and write it to the hdf5 file
-            dicom_transforms = dt.CombineTransforms([
+            dicom_transformations_base = dt.SequenceTransformations([
                 dt.LoadDicomObject(),
                 dt.GetPixelArray(),
                 dt.GetSourcePixelSpacing(),
@@ -49,7 +49,8 @@ class DicomPreprocessor:
                 dt.CheckVoilutFunction(),
                 dt.ResampleToTargetResolution(),
                 dt.NormalizeIntensities(),
-                dt.AppendDicomToHDF5(),
+                dt.GetBoneFinderPoints(),
+                dt.GetSegmentationMasks(),
             ])
 
             for meta in tqdm.tqdm(dicom_files_metadata):
@@ -58,17 +59,25 @@ class DicomPreprocessor:
 
                 # Create container of DICOM file data on which to apply the transforms
                 dicom_container = dt.DicomContainer(
-                    dicom_file_path,
-                    points_file_path,
-                    hdf5_file_object,
-                    dataset,
-                    subject_id,
-                    subject_visit,
-                    target_pixel_spacing,
+                    dicom_file_path=dicom_file_path,
+                    points_file_path=points_file_path,
+                    hdf5_file_object=hdf5_file_object,
+                    dataset=dataset,
+                    subject_id=subject_id,
+                    subject_visit=subject_visit,
+                    target_pixel_spacing=target_pixel_spacing,
                 )
 
-                # Apply transforms
-                dicom_transforms(dicom_container)
+                # Apply the transformations base
+                dicom_transformations_base(dicom_container)
+
+                # Write the unflipped image and the right hip mask to the HDF5 file
+                dt.AppendDicomToHDF5()(dicom_container)
+
+                # Flip the image and the segmentation masks
+                dt.FlipHorizontally()(dicom_container)
+                # Write the flipped image and the flipped left hip mask to the HDF5 file
+                dt.AppendDicomToHDF5()(dicom_container)
 
             hdf5_file_object.close()
         return
