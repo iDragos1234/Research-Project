@@ -16,16 +16,19 @@ class DicomPreprocessor:
 
     data_folder_path: str
     hdf5_file_path: h5py.File
+    limit: float
     target_pixel_spacing: float
 
     def __init__(self,
         data_folder_path: str,
         hdf5_file_path: h5py.File,
         target_pixel_spacing: float,
+        limit: float=None,
     ) -> None:
         self.data_folder_path     = data_folder_path
         self.hdf5_file_path       = hdf5_file_path
         self.target_pixel_spacing = target_pixel_spacing
+        self.limit                = limit
         return
 
     def __call__(self) -> None:
@@ -35,6 +38,10 @@ class DicomPreprocessor:
 
         # List the metadata of all DICOM files
         dicom_files_metadata = ListDicomFilesMetadata()(data_folder_path)
+
+        # If `limit` is specified, take the first `limit` number of elements
+        # If `limit` is `None`, all files are considered
+        dicom_files_metadata = dicom_files_metadata[:self.limit]
 
         # Preprocess the DICOM data folder given as input 
         # and output the result to the specified HDF5 file
@@ -68,16 +75,19 @@ class DicomPreprocessor:
                     target_pixel_spacing=target_pixel_spacing,
                 )
 
-                # Apply the transformations base
-                dicom_transformations_base(dicom_container)
+                try:
+                    # Apply the transformations base
+                    dicom_transformations_base(dicom_container)
 
-                # Write the unflipped image and the right hip mask to the HDF5 file
-                dt.AppendDicomToHDF5()(dicom_container)
+                    # Write the unflipped image and the right hip mask to the HDF5 file
+                    dt.AppendDicomToHDF5()(dicom_container)
 
-                # Flip the image and the segmentation masks
-                dt.FlipHorizontally()(dicom_container)
-                # Write the flipped image and the flipped left hip mask to the HDF5 file
-                dt.AppendDicomToHDF5()(dicom_container)
+                    # Flip the image and the segmentation masks
+                    dt.FlipHorizontally()(dicom_container)
+                    # Write the flipped image and the flipped left hip mask to the HDF5 file
+                    dt.AppendDicomToHDF5()(dicom_container)
+                except dt.PreprocessingException as e:
+                    print(e)
 
             hdf5_file_object.close()
         return
@@ -93,6 +103,8 @@ if __name__ == '__main__':
                         help='output HDF5 file',)
     parser.add_argument('--target-pixel-spacing', metavar='SPACING', type=float,
                         help='resample image to target spacing (mm/pixel)',)
+    parser.add_argument('--limit', metavar='LIMIT', type=int,
+                        help='limit the number of DICOM files to be preprocessed',)
     parser.add_argument('--verbose', action='store_true')
     args = parser.parse_args()
 
@@ -101,6 +113,7 @@ if __name__ == '__main__':
         data_folder_path=args.input,
         hdf5_file_path=args.output,
         target_pixel_spacing=args.target_pixel_spacing,
+        limit=args.limit,
     )
 
     # Perform preprocessing

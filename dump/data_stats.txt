@@ -1,0 +1,13 @@
++-----------+-------+----------------------+-------+
+|   OAI/V00 |  4707 |   OAI-pointfiles/V00 |  4707 |
+|   OAI/V06 |  3638 |   OAI-pointfiles/V06 |  3638 |
+|   OAI/V10 |  2946 |   OAI-pointfiles/V10 |  2945 |
+|     total | 11291 |                total | 11290 |
++-----------+-------+----------------------+-------+
+| CHECK/T00 |   436 | CHECK-pointfiles/T00 |   435 |
+| CHECK/T02 |   717 | CHECK-pointfiles/T02 |   692 |
+| CHECK/T05 |   882 | CHECK-pointfiles/T05 |   826 |
+| CHECK/T08 |   835 | CHECK-pointfiles/T08 |   835 |
+| CHECK/T10 |   833 | CHECK-pointfiles/T10 |   781 |
+|     total |  3703 |                total |  3569 |
++-----------+-------+----------------------+-------+

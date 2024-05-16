@@ -1,21 +1,15 @@
 from typing import Literal
 import h5py
 import hdf5plugin  # <--- DO NOT REMOVE!
-import torch
-import torch.utils.data
+from torch import float32, tensor
+from torch.utils.data import Dataset
 
 
-Dataset = Literal['CHECK', 'OAI']
-SubjectID = str
-SubjectVisit = str
-HipSide = Literal['left', 'right']
-
-
-class MyDataset(torch.utils.data.Dataset):
+class MyDataset(Dataset):
 
     def __init__(self, 
         hdf5_filename: str, 
-        img_dtype: type = torch.float32
+        img_dtype: type = float32
     ) -> None:
         super().__init__()
         self.hdf5_filename: str = hdf5_filename
@@ -26,30 +20,25 @@ class MyDataset(torch.utils.data.Dataset):
         return
 
     def __getitem__(self, index: int):
-        sample = self.samples[index]
         with h5py.File(self.hdf5_filename, 'r') as hdf5_file_object:
             # find subject, visit, image
-            group = hdf5_file_object[sample]
-
+            sample    = self.samples[index]
+            group     = hdf5_file_object[sample]
             image     = group['image']
             segm_mask = group['segmentation_mask']
 
-            image_attrs = dict(image.attrs)
-
-            # load image data and segmentation mask
-            img       = image[:]
-            segm_mask = segm_mask[:]
+            # collect metadata
+            meta = {
+                'group_attributes': group.attrs,
+                'image_attributes': image.attrs,
+            }
 
             # correct output format and dtype
-            img       = torch.tensor(img[None, :, :], dtype=self.img_dtype)
-            segm_mask = torch.tensor(segm_mask[None, :, :, :], dtype=self.img_dtype)
+            image     = tensor(image, dtype=self.img_dtype)
+            segm_mask = tensor(segm_mask, dtype=self.img_dtype)
 
-            # collect metadata
-            meta = {}
-            meta.update(group.attrs)
-            meta.update(image_attrs)
-
-        return img, segm_mask, meta
+            
+        return image, segm_mask, meta
     
     @staticmethod
     def _load_samples(hdf5_filename: str) -> list[str]:

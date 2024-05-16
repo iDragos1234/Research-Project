@@ -9,11 +9,8 @@ Metadata consists of:
 """
 import os, glob, re
 
-
-FILENAME_PATTERNS = {
-    'OAI': re.compile('OAI-(?P<subject_id>[0-9]+)-(?P<subject_visit>V[0-9]+)-[0-9]+.dcm'),
-    'CHECK': re.compile('(?P<subject_id>[0-9]+)_(?P<subject_visit>T[0-9]+)_APO.dcm'),
-}
+import constants as ct
+import dicom_transformations as dt
 
 
 DicomMetaData = tuple[str, str, str, str, str]
@@ -32,33 +29,47 @@ class ListDicomFilesMetadata:
 
         # Normalize file path
         dicom_file_path = os.path.normpath(dicom_file_path)
-        assert os.path.isfile(dicom_file_path), f'There is no file at {dicom_file_path}.'
-        
+        if not os.path.isfile(dicom_file_path):
+            raise dt.PreprocessingException(
+                f'There is no file at {dicom_file_path}.'
+            )
+
         # Find the corresponding points file
         points_file_path = re.sub('\\\\(CHECK|OAI)\\\\', '\\\\\\1-pointfiles\\\\', dicom_file_path) + '.pts'
-        assert os.path.isfile(points_file_path), f'There is no file at {points_file_path}.'
+        if not os.path.isfile(points_file_path):
+            raise dt.PreprocessingException(
+                f'There is no file at {points_file_path}.'
+            )
 
         # Detect subject id and visit
-        filename_regex = FILENAME_PATTERNS[dataset_name]
+        filename_regex = ct.FILENAME_PATTERNS[dataset_name]
         dicom_file_name = os.path.basename(dicom_file_path)
         match = filename_regex.match(dicom_file_name)
         if match:
             subject_id, subject_visit = match.group('subject_id', 'subject_visit')
-            assert visit == subject_visit, \
-                f'Visit specified in directory name different from visit specified in file name: {visit} =/= {subject_visit}.'
+            if visit != subject_visit:
+                raise dt.PreprocessingException(
+                    f'Visit specified in directory name different from visit specified in file name: {visit} =/= {subject_visit}.'
+                )
             return dicom_file_path, points_file_path, dataset_name, subject_id, subject_visit
-        raise RuntimeError('Filename pattern not recognized.')
+        raise dt.PreprocessingException('Filename pattern not recognized.')
 
     @staticmethod
     def _get_dicom_files_metadata(data_folder_path: str) -> list[DicomMetaData]:
-        assert os.path.isdir(data_folder_path), 'Given `data_folder_path` does not point to a directory.'
+        if not os.path.isdir(data_folder_path):
+            raise dt.PreprocessingException(
+                f'The path {data_folder_path} does not point to a directory.'
+            )
         
         dicom_files_metadata: list[DicomMetaData] = []
-        for dataset_name in os.listdir(data_folder_path):
+        for dataset_name in ct.DATASETS: # os.listdir(data_folder_path):
             for subject_visit in os.listdir(f'{data_folder_path}/{dataset_name}'):
                 for dicom_file_path in glob.glob(f'{data_folder_path}/{dataset_name}/{subject_visit}/*.dcm'):
-                    dicom_files_metadata.append(
-                        ListDicomFilesMetadata._get_dicom_file_metadata(dataset_name, subject_visit, dicom_file_path)
-                    )
+                    try:
+                        dicom_files_metadata.append(
+                            ListDicomFilesMetadata._get_dicom_file_metadata(dataset_name, subject_visit, dicom_file_path)
+                        )
+                    except dt.PreprocessingException as e:
+                        print(e)
 
         return dicom_files_metadata

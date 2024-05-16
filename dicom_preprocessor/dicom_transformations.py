@@ -150,11 +150,11 @@ class GetSourcePixelSpacing(DicomTransformation):
         dicom_image: DicomFileObject = dicom_container.dicom_file_object
         pixel_spacing: list[float]   = dicom_image.get('PixelSpacing') or \
                                        dicom_image.get('ImagerPixelSpacing')
-
+        
         if pixel_spacing is None:
-            raise Exception('No pixel spacing found.')
+            raise PreprocessingException('No pixel spacing found.')
         if pixel_spacing[0] != pixel_spacing[1]:
-            raise Exception('Anisotropic pixel spacing is untested.')
+            raise PreprocessingException('Anisotropic pixel spacing is untested.')
 
         dicom_container.source_pixel_spacing = pixel_spacing
         dicom_container.pixel_spacing        = pixel_spacing
@@ -181,7 +181,9 @@ class CheckPhotometricInterpretation(DicomTransformation):
             # Flip intensities
             dicom_container.pixel_array = np.max(pixel_array) - pixel_array
         elif photo_interp != 'MONOCHROME2':
-            raise Exception(f'Photometric interpretation {photo_interp} not supported.')
+            raise PreprocessingException(
+                f'Photometric interpretation {photo_interp} not supported.'
+            )
         return dicom_container
     
 
@@ -190,8 +192,9 @@ class CheckVoilutFunction(DicomTransformation):
     The `VOILUTFunction` property of the DICOM image must be `LINEAR`.
     """
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        if dicom_container.dicom_file_object.get('VOILUTFunction', 'LINEAR') != 'LINEAR':
-            raise Exception('Only supporting VOILUTFunction LINEAR')
+        voilut_func = dicom_container.dicom_file_object.get('VOILUTFunction', 'LINEAR')
+        if voilut_func != 'LINEAR':
+            raise PreprocessingException(f'Only supporting VOILUTFunction LINEAR. Was {voilut_func}.')
         return dicom_container
     
 
@@ -252,13 +255,14 @@ class GetBoneFinderPoints(DicomTransformation):
             ])
 
             # Verify file structure
-            assert lines[0]   == f'version: {version}'
-            assert n_points   == ct.N_POINTS
-            assert lines[1]   == f'n_points: {n_points}'
-            assert len(lines) == n_points + 4
-            assert lines[2]   == '{' \
-            and lines[163] == '}'
-            assert points.shape == (n_points, 2)
+            if lines[0]     != f'version: {version}' \
+            or lines[1]     != f'n_points: {n_points}' \
+            or n_points     != ct.N_POINTS \
+            or len(lines)   != n_points + 4 \
+            or lines[2]     != '{' \
+            or lines[163]   != '}' \
+            or points.shape != (n_points, 2):
+                raise PreprocessingException('Points file structure is invalid.')
 
             dicom_container.bonefinder_points = points
 
@@ -398,26 +402,26 @@ class AppendDicomToHDF5(DicomTransformation):
     """
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
 
-        dicom_file_path          = dicom_container.dicom_file_path
-        # points_file_path         = dicom_container.points_file_path
-        hdf5_file_object         = dicom_container.hdf5_file_object
+        dicom_file_path         = dicom_container.dicom_file_path
+        points_file_path        = dicom_container.points_file_path
+        hdf5_file_object        = dicom_container.hdf5_file_object
 
-        dataset                  = dicom_container.dataset
-        subject_id               = dicom_container.subject_id
-        subject_visit            = dicom_container.subject_visit
+        dataset                 = dicom_container.dataset
+        subject_id              = dicom_container.subject_id
+        subject_visit           = dicom_container.subject_visit
 
-        # dicom_file_object        = dicom_container.dicom_file_object
-        pixel_array              = dicom_container.pixel_array
-        # bonefinder_points       = dicom_container.bonefinder_points
-        right_segmentation_mask  = dicom_container.right_segmentation_mask
-        left_segmentation_mask   = dicom_container.left_segmentation_mask
+        dicom_file_object       = dicom_container.dicom_file_object
+        pixel_array             = dicom_container.pixel_array
+        bonefinder_points       = dicom_container.bonefinder_points
+        right_segmentation_mask = dicom_container.right_segmentation_mask
+        left_segmentation_mask  = dicom_container.left_segmentation_mask
 
-        source_pixel_spacing     = dicom_container.source_pixel_spacing
-        # target_pixel_spacing     = dicom_container.target_pixel_spacing
-        pixel_spacing            = dicom_container.pixel_spacing
+        source_pixel_spacing    = dicom_container.source_pixel_spacing
+        target_pixel_spacing    = dicom_container.target_pixel_spacing
+        pixel_spacing           = dicom_container.pixel_spacing
 
-        intensity_slope          = dicom_container.intensity_slope
-        intensity_offset         = dicom_container.intensity_offset
+        intensity_slope         = dicom_container.intensity_slope
+        intensity_offset        = dicom_container.intensity_offset
         is_flipped_horizontally = dicom_container.is_flipped_horizontally
 
         # Infer which hip side is to be segmented
@@ -433,20 +437,29 @@ class AppendDicomToHDF5(DicomTransformation):
         # Write to hdf5
         group_id = f'/scans/{dataset}/{subject_id}/{subject_visit}/{hip_side}'
         group = hdf5_file_object.require_group(group_id)
-        group.attrs['dataset']    = dataset
+
+        group.attrs['dicom_file_path'] = dicom_file_path
+        group.attrs['points_file_path'] = points_file_path
+        # group.attrs['hdf5_file_object'] = hdf5_file_object
+        group.attrs['dataset'] = dataset
         group.attrs['subject_id'] = subject_id
-        group.attrs['visit']      = subject_visit
+        group.attrs['subject_visit'] = subject_visit
+        # group.attrs['dicom_file_object'] = dicom_file_object
+        # group.attrs['pixel_array'] = pixel_array
+        # group.attrs['bonefinder_points'] = bonefinder_points
+        # group.attrs['right_segmentation_mask'] = right_segmentation_mask
+        # group.attrs['left_segmentation_mask'] = left_segmentation_mask
+        group.attrs['source_pixel_spacing'] = source_pixel_spacing
+        group.attrs['target_pixel_spacing'] = target_pixel_spacing
+        group.attrs['pixel_spacing'] = pixel_spacing
+        group.attrs['intensity_slope'] = intensity_slope
+        group.attrs['intensity_offset'] = intensity_offset
+        group.attrs['is_flipped_horizontally'] = is_flipped_horizontally
 
         img_ds = group.create_dataset(
             'image', data=pixel_array,
             **hdf5plugin.Blosc2(cname='blosclz', clevel=9, filters=hdf5plugin.Blosc2.SHUFFLE)
         )
-
-        img_ds.attrs['source']               = dicom_file_path
-        img_ds.attrs['pixel_spacing']        = pixel_spacing
-        img_ds.attrs['source_pixel_spacing'] = source_pixel_spacing
-        img_ds.attrs['intensity_offset']     = intensity_offset
-        img_ds.attrs['intensity_slope']      = intensity_slope
 
         img_ds = group.create_dataset(
             'segmentation_mask', data=segmentation_mask,
@@ -454,3 +467,8 @@ class AppendDicomToHDF5(DicomTransformation):
         )
 
         return dicom_container
+
+
+class PreprocessingException(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)

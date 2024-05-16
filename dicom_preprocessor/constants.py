@@ -1,5 +1,13 @@
+import re
 import numpy as np
 
+
+DATASETS = ['CHECK', 'OAI']
+
+FILENAME_PATTERNS = {
+    'OAI': re.compile('OAI-(?P<subject_id>[0-9]+)-(?P<subject_visit>V[0-9]+)-[0-9]+.dcm'),
+    'CHECK': re.compile('(?P<subject_id>[0-9]+)_(?P<subject_visit>T[0-9]+)_APO.dcm'),
+}
 
 N_POINTS = 160
 
