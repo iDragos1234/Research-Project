@@ -1,27 +1,44 @@
 from torch.utils.data import DataLoader
 import matplotlib.pyplot as plt
-from monai.transforms import Resize
+from monai.transforms import (
+    Compose, 
+    Resized, 
+    ScaleIntensityd, 
+    GaussianSharpen, 
+    ImageFilter,
+)
 
-from my_dataset import MyDataset
+from dicom_dataset import DicomDataset, DicomDatasetBuilder
 
 
-dataset = MyDataset('C:\\Users\\drago\\Desktop\\Research-Project\\output.h5')
+keys = ['image', 'mask']
+transform = Compose([
+    # EnsureChannelFirstd(keys, channel_dim=1),
+    Resized(keys, (256, 256)),
+    ScaleIntensityd(keys),
+])
 
-dataloader = DataLoader(dataset)
+datasets = DicomDatasetBuilder()\
+    .set_hdf5_source('C:\\Users\\drago\\Desktop\\Research-Project\\output.h5')\
+    .set_transform(transform)\
+    .load_samples()\
+    .build()
+dataset = datasets
 
-for idx, sample in enumerate(dataset.samples):
 
-    img, segm_mask, meta = dataset[idx]
-    # segm_mask = Resize([300, 300, 3])(segm_mask)
+for idx, sample_id in enumerate(dataset.data[:2]):
 
-    print(img.shape, segm_mask.shape)
+    sample = dataset[idx]
+    image, mask = sample['image'], sample['mask']
 
-    plt.title(f'Plot #{idx + 1} - sample {sample}')
-    plt.imshow(img)
+    print(image.shape, mask.shape)
+
+    plt.title(f'Plot #{idx + 1} - sample {sample_id}')
+    plt.imshow(image[0])
     plt.colorbar()
     plt.show()
 
-    plt.title(f'Plot #{idx + 1} - sample {sample}')
-    plt.imshow(segm_mask)
+    plt.title(f'Plot #{idx + 1} - sample {sample_id}')
+    plt.imshow(mask[0])
     plt.colorbar()
     plt.show()

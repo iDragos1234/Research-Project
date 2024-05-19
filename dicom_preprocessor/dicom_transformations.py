@@ -358,16 +358,16 @@ class GetSegmentationMasks(DicomTransformation):
             # set background outside bounding box
             combined_mask[~fg_mask] = ct.LABELS['ignore']
 
-            rgb_img = np.repeat(pixel_array[:, :, None], repeats=3, axis=2).astype(float)
-            rgb_img = rgb_img - rgb_img.min()
-            rgb_img = rgb_img / rgb_img.max()
-            rgb_seg = ct.COLORS[combined_mask, :]
-            rgb     = np.clip(rgb_seg, 0, 1)
+            # rgb_img = np.repeat(pixel_array[:, :, None], repeats=3, axis=2).astype(float)
+            # rgb_img = rgb_img - rgb_img.min()
+            # rgb_img = rgb_img / rgb_img.max()
+            # rgb_seg = ct.COLORS[combined_mask, :]
+            # rgb     = np.clip(rgb_seg, 0, 1)
 
             if side == 'left':
-                dicom_container.left_segmentation_mask = rgb
+                dicom_container.left_segmentation_mask = combined_mask
             elif side == 'right':
-                dicom_container.right_segmentation_mask = rgb
+                dicom_container.right_segmentation_mask = combined_mask
             else:
                 raise RuntimeError(f'Side must be either `left` or `right`. Was `{side}`')
         
