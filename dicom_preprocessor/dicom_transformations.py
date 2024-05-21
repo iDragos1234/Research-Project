@@ -1,8 +1,9 @@
-"""
+'''
 Transforms for the DICOM files.
 Code adapted from `example-preprocessing-code/dicom_util.py`.
-"""
+'''
 from typing import Literal, Union
+from matplotlib import pyplot as plt
 import numpy as np
 from pydicom import dcmread, FileDataset 
 from pydicom.dicomdir import DicomDir
@@ -125,27 +126,27 @@ class SequenceTransformations(Transformation):
 
 
 class LoadDicomObject(DicomTransformation):
-    """
+    '''
     Loads the image from the specified DICOM file into a `DicomContainer`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         dicom_container.dicom_file_object = dcmread(dicom_container.dicom_file_path)
         return dicom_container
     
 
 class GetPixelArray(DicomTransformation):
-    """
+    '''
     Get the pixel array from the `DicomObject` and set it as a field in the `DicomContainer`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         dicom_container.pixel_array = dicom_container.dicom_file_object.pixel_array
         return dicom_container
     
 
 class GetSourcePixelSpacing(DicomTransformation):
-    """
+    '''
     Get the pixel spacing from the `DicomObject` and set it as a field in the `DicomContainer`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         dicom_image: DicomFileObject = dicom_container.dicom_file_object
         pixel_spacing: list[float]   = dicom_image.get('PixelSpacing') or \
@@ -163,16 +164,16 @@ class GetSourcePixelSpacing(DicomTransformation):
         
 
 class CheckPhotometricInterpretation(DicomTransformation):
-    """
+    '''
     Check if pixel intensities are stored as `MONOCHROME2` (white = max, black = min).
     DICOM images must be stored with either `MONOCHROME1` or `MONOCHROME2` as their `Photometric Interpretation`.
     If stored as `MONOCHROME1`, intensities are inverted to match `MONOCHROME2`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        """
+        '''
         Photometric interpretation of DICOM images must be either MONOCHROME1 or MONOCHROME2.
         If it is MONOCHROME1, invert the pixel intensities to match the MONOCHROME2.
-        """
+        '''
         dicom_image  = dicom_container.dicom_file_object
         pixel_array  = dicom_container.pixel_array
         photo_interp = dicom_image.get('PhotometricInterpretation')
@@ -188,9 +189,9 @@ class CheckPhotometricInterpretation(DicomTransformation):
     
 
 class CheckVoilutFunction(DicomTransformation):
-    """
+    '''
     The `VOILUTFunction` property of the DICOM image must be `LINEAR`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         voilut_func = dicom_container.dicom_file_object.get('VOILUTFunction', 'LINEAR')
         if voilut_func != 'LINEAR':
@@ -199,9 +200,9 @@ class CheckVoilutFunction(DicomTransformation):
     
 
 class ResampleToTargetResolution(DicomTransformation):
-    """
+    '''
     Resample image to the target resolution, as indicated by the `target_pixel_spacing`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         source_pixel_spacing = dicom_container.source_pixel_spacing
         target_pixel_spacing = dicom_container.target_pixel_spacing
@@ -215,9 +216,9 @@ class ResampleToTargetResolution(DicomTransformation):
     
 
 class NormalizeIntensities(DicomTransformation):
-    """
+    '''
     Normalize pixel intensities using percentiles.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
 
         pixel_array = dicom_container.pixel_array
@@ -270,12 +271,12 @@ class GetBoneFinderPoints(DicomTransformation):
 
 
 class GetSegmentationMasks(DicomTransformation):
-    """
+    '''
     Compute the RGB pixel array of the segmentation mask,
     highlighting the various components of the hip.
     In the `DicomContainer` it is specified whether to compute 
     the mask for the left, right or both sides of the hip.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         pixel_array   = dicom_container.pixel_array
         pixel_spacing = dicom_container.pixel_spacing
@@ -290,11 +291,9 @@ class GetSegmentationMasks(DicomTransformation):
         js_bbox = {}
         for side, offset in ct.SIDES.items():
 
-            combined_mask = np.zeros(shape=pixel_array.shape, dtype=np.uint8)
-            fg_mask       = np.zeros_like(combined_mask, dtype=bool)
+            fg_mask = np.zeros(shape=pixel_array.shape, dtype=bool)
 
             # background label inside the bounding box
-            combined_mask[:] = ct.LABELS['background']
             
             # define the bounding box of the segmentation region
             js_bbox[side] = bbox = {
@@ -324,6 +323,13 @@ class GetSegmentationMasks(DicomTransformation):
 
             # define the regions
             regions = {
+                'femur': np.array([
+                    *points[np.array(ct.CURVES['proximal femur']) + offset],
+                ]),
+                'acetabulum': np.array([
+                    *points[np.array(ct.CURVES['acetabular roof']) + offset],
+                    [bbox['medial'], bbox['top']],
+                ]),
                 'joint space': np.array([
                     # note: this polygon is larger than the joint space,
                     # but the excess will be covered by the bone regions
@@ -338,32 +344,49 @@ class GetSegmentationMasks(DicomTransformation):
                     # - to topmost point of acetabulum curve
                     points[67 + offset],
                 ]),
-                'acetabulum': np.array([
-                    *points[np.array(ct.CURVES['acetabular roof']) + offset],
-                    [bbox['medial'], bbox['top']],
-                ]),
-                'femur': np.array([
-                    *points[np.array(ct.CURVES['proximal femur']) + offset],
-                ]),
             }
 
-            # add regions to mask
-            for idx, (name, region) in enumerate(regions.items()):
-                mask = polygon2mask(
-                    combined_mask.shape,
-                    (region / pixel_spacing)[:, [1, 0]]
-                )
-                combined_mask[mask] = idx + 2
+            '''
+            Extract masks for each region.
+            '''
+            femur_mask = polygon2mask(
+                pixel_array.shape,
+                (regions['femur'] / pixel_spacing)[:, [1, 0]],
+            )
+            acetabulum_mask = polygon2mask(
+                pixel_array.shape,
+                (regions['acetabulum'] / pixel_spacing)[:, [1, 0]],
+            )
 
-            # set background outside bounding box
-            combined_mask[~fg_mask] = ct.LABELS['ignore']
+            joint_space_mask = polygon2mask(
+                pixel_array.shape,
+                (regions['joint space'] / pixel_spacing)[:, [1, 0]],
+            )
 
-            # rgb_img = np.repeat(pixel_array[:, :, None], repeats=3, axis=2).astype(float)
-            # rgb_img = rgb_img - rgb_img.min()
-            # rgb_img = rgb_img / rgb_img.max()
-            # rgb_seg = ct.COLORS[combined_mask, :]
-            # rgb     = np.clip(rgb_seg, 0, 1)
+            '''
+            Create combined mask as an ndarray of masks for each region.
+            Note that the joint space mask is larger than the true area,
+            the pixels overlapping with the other regions are set to 0.
+            '''
+            combined_mask = np.zeros(shape=pixel_array.shape, dtype=np.uint8)
+            combined_mask = combined_mask[None]
+            combined_mask = np.repeat(combined_mask, repeats=len(regions), axis=0)
 
+            combined_mask[0][femur_mask]       = 1
+
+            combined_mask[1][acetabulum_mask]  = 1
+
+            combined_mask[2][joint_space_mask] = 1
+            combined_mask[2][femur_mask]       = 0
+            combined_mask[2][acetabulum_mask]  = 0
+
+            # combined_mask[0][~fg_mask]         = 0
+            # combined_mask[1][~fg_mask]         = 0
+            # combined_mask[2][~fg_mask]         = 0
+        
+            '''
+            Assign the combined mask to the current side of the body being segmented.
+            '''
             if side == 'left':
                 dicom_container.left_segmentation_mask = combined_mask
             elif side == 'right':
@@ -375,9 +398,9 @@ class GetSegmentationMasks(DicomTransformation):
     
 
 class FlipHorizontally(DicomTransformation):
-    """
+    '''
     Flip the pixel array and the segmentation masks for both sides horizontally.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
         dicom_container.pixel_array = np.flip(
             dicom_container.pixel_array, 
@@ -385,11 +408,11 @@ class FlipHorizontally(DicomTransformation):
         )
         dicom_container.right_segmentation_mask = np.flip(
             dicom_container.right_segmentation_mask, 
-            axis=1,
+            axis=2,
         )
         dicom_container.left_segmentation_mask = np.flip(
             dicom_container.left_segmentation_mask, 
-            axis=1,
+            axis=2,
         )
         dicom_container.is_flipped_horizontally = \
             not dicom_container.is_flipped_horizontally
@@ -397,9 +420,9 @@ class FlipHorizontally(DicomTransformation):
 
 
 class AppendDicomToHDF5(DicomTransformation):
-    """
+    '''
     Write the information contained within the given `DicomContainer` to the HDF5 file indicated by the same `DicomContainer`.
-    """
+    '''
     def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
 
         dicom_file_path         = dicom_container.dicom_file_path

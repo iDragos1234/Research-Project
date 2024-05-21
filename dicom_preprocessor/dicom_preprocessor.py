@@ -3,12 +3,12 @@ Code adapted from `example-preprocessing-code/convert_for_localization.py`.
 
 How to run: execute the following command in the bash terminal:
 ```
-python ./dicom_preprocessor/dicom_preprocessor.py --input "./data" --output "output.h5" --target-pixel-spacing 1
+python ./dicom_preprocessor/dicom_preprocessor.py --input "./data" --output "./output.h5" --target-pixel-spacing 1
 ```
 """
 import h5py, argparse, tqdm
 
-from list_dicom_files_metadata import ListDicomFilesMetadata
+from list_dicom_files import ListDicomFiles
 import dicom_transformations as dt
 
 
@@ -37,7 +37,7 @@ class DicomPreprocessor:
         target_pixel_spacing = self.target_pixel_spacing
 
         # List the metadata of all DICOM files
-        dicom_files_metadata = ListDicomFilesMetadata()(data_folder_path)
+        dicom_files_metadata = ListDicomFiles()(data_folder_path)
 
         # If `limit` is specified, take the first `limit` number of elements
         # If `limit` is `None`, all files are considered

@@ -1,12 +1,10 @@
 import numpy as np
 import h5py
 import hdf5plugin  # <--- DO NOT REMOVE!
-from torch import float32, tensor, is_tensor, Tensor
+from torch import float32, tensor, Tensor
 from torch.utils.data import Dataset
 from monai.transforms.transform import Transform
 from monai.data import partition_dataset
-
-from sklearn.model_selection import train_test_split
 
 
 class DicomDataset(Dataset):
@@ -20,7 +18,7 @@ class DicomDataset(Dataset):
     def __init__(self, 
         hdf5_filename: str,
         data: list[str],
-        transform: Transform,
+        transform: Transform=None,
         img_dtype: type = float32,
     ) -> None:
         super().__init__()
@@ -49,9 +47,6 @@ class DicomDataset(Dataset):
         return meta
 
     def __getitem__(self, index) -> dict[str, Tensor]:
-        # if is_tensor(index):
-        #     index = index.tolist()
-
         with h5py.File(self.hdf5_filename, 'r') as hdf5_file_object:
             # find subject, visit, image
             sample = self.data[index]
@@ -67,20 +62,31 @@ class DicomDataset(Dataset):
 
             # correct output format and dtype
             image = tensor(np.array(image)[None], dtype=self.img_dtype)
-            mask  = tensor(np.array(mask)[None], dtype=self.img_dtype)
+            mask  = tensor(np.array(mask), dtype=self.img_dtype)
 
-        return self.transform({'image': image, 'mask': mask})
+        return {'image': image, 'mask': mask} if self.transform is None \
+            else self.transform({'image': image, 'mask': mask})
             
 
 class DicomDatasetBuilder:
 
     hdf5_filename: str
+    img_dtype: type
+    transform: Transform
     data: list[str]
     data_splits: list[list[str]]
-    transform: Transform
+
+    def __init__(self) -> None:
+        self.transform = None
+        self.img_dtype = float32
+        return
 
     def set_hdf5_source(self, hdf5_filename: str):
         self.hdf5_filename = hdf5_filename
+        return self
+    
+    def set_img_dtype(self, img_dtype: type):
+        self.img_dtype = img_dtype
         return self
     
     def set_transform(self, transform: Transform):
@@ -99,7 +105,8 @@ class DicomDatasetBuilder:
                         for hip_side in hdf5_file_object[subject_visit_path]:
                             hip_side_path = f'{subject_visit_path}/{hip_side}'
                             data.append(hip_side_path)
-        self.data = data
+        self.data        = data
+        self.data_splits = [data]
         return self
     
     def split_data(self,
@@ -114,78 +121,14 @@ class DicomDatasetBuilder:
             seed=seed, 
         )
         return self
-    
-    def train_test_split(self, 
-        test_size=None, 
-        train_size=None, 
-        random_state=None, 
-        shuffle=True,
-        stratify=None,
-    ):
-        """
-        Splits the samples into test and train samples.
-        Refer to https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html.
-        """
-        temp = train_test_split(
-            self.data,
-            test_size=test_size,
-            train_size=train_size,
-            random_state=random_state,
-            shuffle=shuffle,
-            stratify=stratify,
-        )
-        self.test_samples  = temp[1]
-        self.train_samples = temp[0]
-        return self
 
-    def train_validation_test_split(self, 
-        test_size=None, 
-        validation_size=None,
-        train_size=None, 
-        random_state=None, 
-        shuffle=True,
-        stratify=None,
-    ):
-        """
-        Splits the data into test, validation and train sets.
-        Refer to https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.train_test_split.html.
-        """
-        temp = train_test_split(
-            self.data,
-            test_size=test_size,
-            random_state=random_state,
-            shuffle=shuffle,
-            stratify=stratify,
-        )
-        self.test_samples = temp[1]
-
-        temp = train_test_split(
-            temp[0],
-            test_size=validation_size,
-            train_size=train_size,
-            random_state=random_state,
-            shuffle=shuffle,
-            stratify=stratify,
-        )
-        self.validation_samples = temp[1]
-        self.train_samples      = temp[0]
-        return self
-
-    def build(self):
-        if self.test_samples is not None \
-            and self.validation_samples is not None \
-            and self.train_samples is not None:
-            return DicomDataset(self.hdf5_filename, self.test_samples, self.transform), \
-                   DicomDataset(self.hdf5_filename, self.validation_samples, self.transform), \
-                   DicomDataset(self.hdf5_filename, self.train_samples, self.transform)
-        elif self.test_samples is not None \
-            and self.validation_samples is None \
-            and self.train_samples is not None:
-            return DicomDataset(self.hdf5_filename, self.test_samples, self.transform), \
-                   DicomDataset(self.hdf5_filename, self.train_samples, self.transform)
-        elif self.test_samples is None \
-            and self.validation_samples is None \
-            and self.train_samples is None:
-            return DicomDataset(self.hdf5_filename, self.data, self.transform)
-        else:
-            raise RuntimeError()
+    def build(self) -> list[DicomDataset]:
+        return [
+            DicomDataset(
+                hdf5_filename=self.hdf5_filename,
+                data=data,
+                transform=self.transform,
+                img_dtype=self.img_dtype,
+            ) 
+            for data in self.data_splits
+        ]

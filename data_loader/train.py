@@ -1,234 +1,199 @@
-from monai.utils import first
-import matplotlib.pyplot as plt
-import torch
 import os
-import numpy as np
-from monai.losses import DiceLoss
+from matplotlib import pyplot as plt
 from tqdm import tqdm
+import numpy as np
+import torch
+from torch.utils.tensorboard import SummaryWriter
+from monai.visualize import plot_2d_or_3d_image
+from monai.data import decollate_batch
 
-# from torch.utils.tensorboard import SummaryWriter <<< TODO
-
-def dice_metric(predicted, target):
-    '''
-    In this function we take `predicted` and `target` (label) to calculate the dice coeficient then we use it 
-    to calculate a metric value for the training and the validation.
-    '''
-    dice_value = DiceLoss(to_onehot_y=True, sigmoid=True, squared_pred=True)
-    value = 1 - dice_value(predicted, target).item()
-    return value
-
-def calculate_weights(val1, val2):
-    '''
-    In this function we take the number of the background and the forgroud pixels to return the `weights` 
-    for the cross entropy loss values.
-    '''
-    count = np.array([val1, val2])
-    summ = count.sum()
-    weights = count/summ
-    weights = 1/weights
-    summ = weights.sum()
-    weights = weights/summ
-    return torch.tensor(weights, dtype=torch.float32)
 
 def train(
     model, 
     data_in, 
     loss_function, 
+    metric_function, 
     optimizer, 
     max_epochs, 
     model_directory_path, 
     validation_interval, 
     device,
+    post_transf,
+    verbose,
 ):
+    if verbose:
+        print('Start training ...')
     #--------------------------------------------
-    best_metric = -1
-    best_metric_epoch = -1
-    epoch_loss_train_values = []
-    epoch_loss_validion_values = []
-    metric_train_values = []
-    metric_validation_values = []
-    # writer = SummaryWriter() <<< TODO
+    best_valid_metric           = float('-inf')
+    best_valid_metric_epoch     = None
+
+    train_loss_values_per_epoch = []
+    valid_loss_values_per_epoch = []
+
+    train_metric_values         = []
+    valid_metric_values         = []
+
+    writer = SummaryWriter()
     #--------------------------------------------
 
     #--------------------------------------------
-    test_loader, validation_loader, train_loader = data_in
-    
+    test_loader, valid_loader, train_loader = data_in
     #--------------------------------------------
 
+    train_epoch_length = len(train_loader)
+
+    '''
+    Start training loop
+    '''
     for epoch in range(max_epochs):
 
-        #--------------------------------------------
-        print("-" * 10)
-        print(f"epoch {epoch + 1}/{max_epochs}")
+        if verbose:
+            print('-' * 20)
+            print(f'Epoch {epoch + 1}/{max_epochs}')
+
+        '''
+        Training step:
+        '''
         model.train()
-        train_epoch_loss = 0
-        train_step = 0
-        #--------------------------------------------
-
-        for batch_data in train_loader:
+        epoch_train_loss = 0
+        for train_step, train_batch_data in enumerate(train_loader):
             
-            train_step += 1
-
             #--------------------------------------------
-            inputs = batch_data['image'].to(device)
-            labels = batch_data['mask'].to(device)
+            train_inputs = train_batch_data['image'].to(device)
+            train_labels = train_batch_data['mask'].to(device)
             #--------------------------------------------
-            
-            #-------------------------------------------
             optimizer.zero_grad()
-            outputs = model(inputs)
-            train_loss = loss_function(outputs, labels)
+            train_outputs = model(train_inputs)
+            train_loss = loss_function(train_outputs, train_labels)
             train_loss.backward()
             optimizer.step()
             #--------------------------------------------
+            train_outputs = [post_transf(i) for i in decollate_batch(train_outputs)]
+            metric_function(y_pred=train_outputs, y=train_labels)
+            #--------------------------------------------
 
             #--------------------------------------------
-            train_epoch_loss += train_loss.item()
-            train_epoch_len   = len(train_loader) // train_loader.batch_size
-            print(
-                f'{train_step}/{train_epoch_len}, '
-                f'train_loss: {train_loss.item():.4f}'
+            epoch_train_loss += train_loss.item()
+            writer.add_scalar(
+                'train_loss', train_loss.item(), 
+                train_epoch_length * epoch + train_step,
             )
-            # writer.add_scalar(
-            #     'train_loss', train_loss.item(), 
-            #     train_epoch_len * epoch + train_step,
-            # ) <<< TODO
+
+            if verbose:
+                print(
+                    f'{train_step + 1}/{train_epoch_length}, '
+                    f'train_loss: {train_loss.item():.4f}'
+                )
             #--------------------------------------------
 
             #--------------------------------------------
-            if epoch == max_epochs - 1:
-                plt.imshow(outputs.detach().numpy()[0][0])
+            # TODO: DELETE >>>
+            if verbose and epoch == max_epochs - 1:
+                plt.figure(f'label {train_step}', (18, 6))
+                plt.subplot(1, 4, 1)
+                plt.imshow(train_inputs.detach().cpu()[0][0])
+                for i in range(3):
+                    plt.subplot(1, 4, i + 2)
+                    plt.title(f'label channel {i}')
+                    plt.imshow(train_outputs[0][i])
                 plt.show()
+            # <<< TODO: DELETE
             #--------------------------------------------
+
+        train_metric = metric_function.aggregate().item()
+        train_metric_values.append(train_metric)
+        metric_function.reset()
+        
+        if verbose:
+            print(f'Train metric: {train_metric}')
 
         #--------------------------------------------
-        train_epoch_loss /= train_step
-        epoch_loss_train_values.append(train_epoch_loss)
-        print(f'epoch {epoch + 1}, average loss: {train_epoch_loss:.4f}')
+        epoch_train_loss /= train_epoch_length
+        train_loss_values_per_epoch.append(epoch_train_loss)
 
         np.save(
             os.path.join(model_directory_path, 'loss_train.npy'), 
-            epoch_loss_train_values,
+            train_loss_values_per_epoch,
         )
         #--------------------------------------------
 
-
-        print('-'*20)
+        if verbose:
+            print(f'Epoch {epoch + 1}, average loss: {epoch_train_loss:.4f}')
+            print('-' *20)
         
+        '''
+        Validation step (frequency of this step is specified by `validation_interval`):
+        '''
         if (epoch + 1) % validation_interval == 0:
-            test_epoch_loss = 0
-            test_metric = 0
-            epoch_metric_test = 0
-            test_step = 0
-
             model.eval()
-
             with torch.no_grad():
-                for val_data in validation_loader:
-                    test_step += 1
+                for valid_step, valid_batch_data in enumerate(valid_loader):
 
-        #             #--------------------------------------------
-        #             val_data               = transforms(val_data)
-        #             val_inputs, val_labels = val_data['image'], val_data['mask']
-        #             val_inputs, val_labels = val_inputs[:, None], val_labels[:, None]
-        #             val_inputs, val_labels = val_inputs.to(device), val_labels.to(device)
                     #--------------------------------------------
-                    # roi_size = (96, 96)
-                    # sw_batch_size = 4
-                    # val_outputs = sliding_window_inference(val_images, roi_size, sw_batch_size, model)
-                    # val_outputs = [post_trans(i) for i in decollate_batch(val_outputs)]
+                    valid_inputs = valid_batch_data['image'].to(device)
+                    valid_labels = valid_batch_data['mask'] .to(device)
                     #--------------------------------------------
-                    # TODO >>>
-        #             test_outputs = model(test_image)
+                    valid_outputs = model(valid_inputs)
+                    valid_outputs = [post_transf(i) for i in decollate_batch(valid_outputs)]
+                    metric_function(y_pred=valid_outputs, y=valid_labels)
+                    #--------------------------------------------
+
+                    # TODO: DELETE >>>
+                    if verbose and epoch == max_epochs - 1:
+
+                        valid_inputs = valid_inputs.detach().cpu()
+                        valid_labels = valid_labels.detach().cpu()
+
+                        plt.figure(f'validation label {valid_step}')
+                        plt.subplot(1, 7, 1)
+                        plt.imshow(valid_inputs[0][0])
+                        for i in range(3):
+                            plt.subplot(1, 7, i + 2)
+                            plt.title(f'y channel {i}')
+                            plt.imshow(valid_labels[0][i])
+
+                        for i in range(3):
+                            plt.subplot(1, 7, i + 5)
+                            plt.title(f'y_hat channel {i}')
+                            plt.imshow(valid_outputs[0][i])
+                        plt.show()
+                    # <<< TODO: DELETE
+
+                valid_metric = metric_function.aggregate().item()
+                valid_metric_values.append(valid_metric)
+                metric_function.reset()
+
+                '''
+                If current metric is the best so far, save the current model 
+                '''
+                if valid_metric > best_valid_metric:
+                    best_valid_metric       = valid_metric
+                    best_valid_metric_epoch = epoch + 1
+                    torch.save(
+                        model.state_dict(), 
+                        os.path.join(model_directory_path, 'best_metric_model.pth'),
+                    )
                     
-        #             test_loss = loss(test_outputs, test_mask)
-        #             test_epoch_loss += test_loss.item()
-        #             test_metric = dice_metric(test_outputs, test_mask)
-        #             epoch_metric_test += test_metric
-                    
-                
-        #         test_epoch_loss /= test_step
-        #         print(f'test_loss_epoch: {test_epoch_loss:.4f}')
-        #         save_loss_test.append(test_epoch_loss)
-        #         np.save(os.path.join(model_dir, 'loss_test.npy'), save_loss_test)
+                    if verbose:
+                        print('Saved new best metric model.')
 
-        #         epoch_metric_test /= test_step
-        #         print(f'test_dice_epoch: {epoch_metric_test:.4f}')
-        #         save_metric_test.append(epoch_metric_test)
-        #         np.save(os.path.join(model_dir, 'metric_test.npy'), save_metric_test)
+                if verbose:
+                    print(
+                        f'Current epoch: {epoch + 1}, '
+                        f'current metric: {valid_metric:.4f}, '
+                        f'best metric: {best_valid_metric:.4f} '
+                        f'at epoch {best_valid_metric_epoch}'
+                    )
+                writer.add_scalar('val_mean_dice', valid_metric, epoch + 1)
 
-        #         if epoch_metric_test > best_metric:
-        #             best_metric = epoch_metric_test
-        #             best_metric_epoch = epoch + 1
-        #             torch.save(model.state_dict(), os.path.join(
-        #                 model_dir, "best_metric_model.pth"))
-                
-        #         print(
-        #             f"current epoch: {epoch + 1} current mean dice: {test_metric:.4f}"
-        #             f"\nbest mean dice: {best_metric:.4f} "
-        #             f"at epoch: {best_metric_epoch}"
-        #         )
+                plot_2d_or_3d_image(valid_inputs, epoch + 1, writer, index=0, tag='image')
+                plot_2d_or_3d_image(valid_labels, epoch + 1, writer, index=0, tag='label')
+                plot_2d_or_3d_image(valid_outputs, epoch + 1, writer, index=0, tag='output')
 
-    len_train = len(train_loader)
-
-    print(
-        f"train completed, best_metric: {best_metric:.4f} "
-        f"at epoch: {best_metric_epoch}"
-    )
-
-
-def show_patient(data, SLICE_NUMBER=1, train=True, test=False):
-    """
-    This function is to show one patient from your datasets, so that you can see if the it is okay or you need 
-    to change/delete something.
-
-    `data`: this parameter should take the patients from the data loader, which means you need to can the function
-    prepare first and apply the transforms that you want after that pass it to this function so that you visualize 
-    the patient with the transforms that you want.
-    `SLICE_NUMBER`: this parameter will take the slice number that you want to display/show
-    `train`: this parameter is to say that you want to display a patient from the training data (by default it is true)
-    `test`: this parameter is to say that you want to display a patient from the testing patients.
-    """
-
-    check_patient_train, check_patient_test = data
-
-    view_train_patient = first(check_patient_train)
-    view_test_patient = first(check_patient_test)
-
-    
-    if train:
-        plt.figure("Visualization Train", (12, 6))
-        plt.subplot(1, 2, 1)
-        plt.title(f"vol {SLICE_NUMBER}")
-        plt.imshow(view_train_patient["vol"][0, 0, :, :, SLICE_NUMBER], cmap="gray")
-
-        plt.subplot(1, 2, 2)
-        plt.title(f"seg {SLICE_NUMBER}")
-        plt.imshow(view_train_patient["seg"][0, 0, :, :, SLICE_NUMBER])
-        plt.show()
-    
-    if test:
-        plt.figure("Visualization Test", (12, 6))
-        plt.subplot(1, 2, 1)
-        plt.title(f"vol {SLICE_NUMBER}")
-        plt.imshow(view_test_patient["vol"][0, 0, :, :, SLICE_NUMBER], cmap="gray")
-
-        plt.subplot(1, 2, 2)
-        plt.title(f"seg {SLICE_NUMBER}")
-        plt.imshow(view_test_patient["seg"][0, 0, :, :, SLICE_NUMBER])
-        plt.show()
-
-
-def calculate_pixels(data):
-    val = np.zeros((1, 2))
-
-    for batch in tqdm(data):
-        batch_label = batch["seg"] != 0
-        _, count = np.unique(batch_label, return_counts=True)
-
-        if len(count) == 1:
-            count = np.append(count, 0)
-        val += count
-
-    print('The last values:', val)
-    return val
+    if verbose:
+        print(
+            'Train completed, '
+            f'best_metric: {best_valid_metric:.4f} '
+            f'at epoch: {best_valid_metric_epoch}'
+        )
+    writer.close()
