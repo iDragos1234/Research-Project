@@ -1,4 +1,4 @@
-"""
+'''
 List the metadata of all DICOM files in the CHECK and OAI datasets.
 Metadata consists of: 
     * .dcm DICOM file path, 
@@ -6,8 +6,9 @@ Metadata consists of:
     * dataset name (CHECK or OAI), 
     * subject id,
     * dubject visit.
-"""
+'''
 import os, glob, re
+from typing import Literal
 
 import constants as ct
 import dicom_transformations as dt
@@ -35,21 +36,30 @@ class ListDicomFiles:
             )
 
         # Find the corresponding points file
-        points_file_path = re.sub('\\\\(CHECK|OAI)\\\\', '\\\\\\1-pointfiles\\\\', dicom_file_path) + '.pts'
+        points_file_path = re.sub(
+            f'\\\\({ct.Dataset.CHECK.value}|{ct.Dataset.OAI.value})\\\\',
+            '\\\\\\1-pointfiles\\\\', dicom_file_path
+        ) + '.pts'
+
         if not os.path.isfile(points_file_path):
             raise dt.PreprocessingException(
                 f'There is no file at {points_file_path}.'
             )
 
         # Detect subject id and visit
-        filename_regex = ct.FILENAME_PATTERNS[dataset_name]
+        filename_regex: re.Pattern[str]
+        try:
+            filename_regex = ct.FilenamePattern[dataset_name].value
+        except AttributeError as e:
+            raise dt.PreprocessingException(f'Unknown dataset name. Was: {dataset_name}.')
+        
         dicom_file_name = os.path.basename(dicom_file_path)
         match = filename_regex.match(dicom_file_name)
         if match:
             subject_id, subject_visit = match.group('subject_id', 'subject_visit')
             if visit != subject_visit:
                 raise dt.PreprocessingException(
-                    f'Visit specified in directory name different from visit specified in file name: {visit} =/= {subject_visit}.'
+                    f'Visit specified in directory name is different from visit specified in file name: {visit} =/= {subject_visit}.'
                 )
             return dicom_file_path, points_file_path, dataset_name, subject_id, subject_visit
         raise dt.PreprocessingException('Filename pattern not recognized.')
@@ -62,7 +72,7 @@ class ListDicomFiles:
             )
         
         dicom_files_metadata: list[DicomMetaData] = []
-        for dataset_name in ct.DATASETS: # os.listdir(data_folder_path):
+        for dataset_name in ct.Dataset.values():
             for subject_visit in os.listdir(f'{data_folder_path}/{dataset_name}'):
                 for dicom_file_path in glob.glob(f'{data_folder_path}/{dataset_name}/{subject_visit}/*.dcm'):
                     try:

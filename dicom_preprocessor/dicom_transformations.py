@@ -1,6 +1,5 @@
 '''
-Transforms for the DICOM files.
-Code adapted from `example-preprocessing-code/dicom_util.py`.
+Transformations for the DICOM files and BoneFinder generated points files.
 '''
 from typing import Literal, Union
 from matplotlib import pyplot as plt
@@ -32,24 +31,10 @@ TRANSFORMS = (
 )
 
 
-class Container:
-    ...
-
-class Transformation:
-    
-    def __init__(self) -> None:
-        ...
-
-    def __call__(self, container: Container):
-        ...
-
-
 DicomFileObject = Union[FileDataset, DicomDir]
 
-Point = tuple[float, float]
 
-
-class DicomContainer(Container):
+class DicomContainer:
     dicom_file_path: str
     points_file_path: str
     hdf5_file_object: h5py.File
@@ -64,13 +49,16 @@ class DicomContainer(Container):
     right_segmentation_mask: np.ndarray
     left_segmentation_mask: np.ndarray
     
-    source_pixel_spacing: list[float]
-    target_pixel_spacing: float
-    pixel_spacing: list[float]
+    source_pixel_spacing: tuple[float]
+    target_pixel_spacing: tuple[float]
+    pixel_spacing: tuple[float]
+
+    source_pixel_array_shape: tuple[float, float]
+    target_pixel_array_shape: tuple[float, float]
+    pixel_array_shape: tuple[float, float]
 
     intensity_offset: float
     intensity_slope: float
-    is_flipped_horizontally: bool
 
     def __init__(self,
         dicom_file_path: str,
@@ -79,49 +67,49 @@ class DicomContainer(Container):
         dataset: Literal['CHECK', 'OAI'],
         subject_id: str,
         subject_visit: str,
-        target_pixel_spacing: float = None,
+        target_pixel_spacing: tuple[float, float],
+        target_pixel_array_shape: tuple[float, float], 
         intensity_slope: float = 1.0,
         intensity_offset: float = 0.0,
-        is_flipped_horizontally: bool = False
     ) -> None:
-        self.dicom_file_path         = dicom_file_path
-        self.points_file_path        = points_file_path
-        self.hdf5_file_object        = hdf5_file_object
+        self.dicom_file_path          = dicom_file_path
+        self.points_file_path         = points_file_path
+        self.hdf5_file_object         = hdf5_file_object
 
-        self.dataset                 = dataset
-        self.subject_id              = subject_id
-        self.subject_visit           = subject_visit
+        self.dataset                  = dataset
+        self.subject_id               = subject_id
+        self.subject_visit            = subject_visit
 
-        self.target_pixel_spacing    = target_pixel_spacing
+        self.target_pixel_spacing     = target_pixel_spacing
+        self.target_pixel_array_shape = target_pixel_array_shape
 
-        self.intensity_slope         = intensity_slope
-        self.intensity_offset        = intensity_offset
+        self.intensity_slope          = intensity_slope
+        self.intensity_offset         = intensity_offset
 
-        self.is_flipped_horizontally = is_flipped_horizontally
         return
 
 
-class DicomTransformation(Transformation):
+class DicomTransformation:
 
     def __init__(self) -> None:
-        ...
+        pass
 
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        ...
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        pass
 
 
-class SequenceTransformations(Transformation):
+class CombineTransformations(DicomTransformation):
 
-    transforms: list[Transformation]
+    transformations: list[DicomTransformation]
     
-    def __init__(self, transforms: list[Transformation]) -> None:
+    def __init__(self, transformations: list[DicomTransformation]) -> None:
         super().__init__()
-        self.transforms = transforms
+        self.transformations = transformations
         return
 
-    def __call__(self, container: Container) -> Container:
-        for transform in self.transforms:
-            container = transform(container)
+    def __call__(self, container: DicomContainer) -> DicomTransformation:
+        for t in self.transformations:
+            container = t(container)
         return container
 
 
@@ -129,122 +117,159 @@ class LoadDicomObject(DicomTransformation):
     '''
     Loads the image from the specified DICOM file into a `DicomContainer`.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        dicom_container.dicom_file_object = dcmread(dicom_container.dicom_file_path)
-        return dicom_container
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        dicom.dicom_file_object = dcmread(dicom.dicom_file_path)
+        return dicom
     
 
 class GetPixelArray(DicomTransformation):
     '''
     Get the pixel array from the `DicomObject` and set it as a field in the `DicomContainer`.
+    Note that this transformation adds one more dimension to the original 2D image.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        dicom_container.pixel_array = dicom_container.dicom_file_object.pixel_array
-        return dicom_container
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        pixel_array = dicom.dicom_file_object.pixel_array
+
+        # Ensure that the 2D image is stored in a 3D pixel array.
+        if pixel_array.ndim == 2:
+            pixel_array = pixel_array[None]
+        else:
+            raise PreprocessingException(
+                f'Unexpected `pixel_arrray.ndim`.'
+                f'Was: {pixel_array.ndim}.'
+            )
+        dicom.pixel_array              = pixel_array
+
+        # Get the shape of the pixel array
+        dicom.source_pixel_array_shape = pixel_array.shape
+        dicom.pixel_array_shape        = pixel_array.shape
+
+        return dicom
     
 
 class GetSourcePixelSpacing(DicomTransformation):
     '''
     Get the pixel spacing from the `DicomObject` and set it as a field in the `DicomContainer`.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        dicom_image: DicomFileObject = dicom_container.dicom_file_object
-        pixel_spacing: list[float]   = dicom_image.get('PixelSpacing') or \
-                                       dicom_image.get('ImagerPixelSpacing')
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        pixel_spacing: tuple[float, float] = tuple(
+            dicom.dicom_file_object.get(ct.DicomAttributes.PIXEL_SPACING.value) or \
+            dicom.dicom_file_object.get(ct.DicomAttributes.IMAGER_PIXEL_SPACING.value)
+        )
         
         if pixel_spacing is None:
             raise PreprocessingException('No pixel spacing found.')
-        if pixel_spacing[0] != pixel_spacing[1]:
-            raise PreprocessingException('Anisotropic pixel spacing is untested.')
 
-        dicom_container.source_pixel_spacing = pixel_spacing
-        dicom_container.pixel_spacing        = pixel_spacing
+        if pixel_spacing[0] != pixel_spacing[1]:
+            raise PreprocessingException(
+                f'Anisotropic pixel spacing is untested.'
+                f'Was: {pixel_spacing}.'
+            )
+
+        dicom.source_pixel_spacing = pixel_spacing
+        dicom.pixel_spacing        = pixel_spacing
         
-        return dicom_container
+        return dicom
         
 
 class CheckPhotometricInterpretation(DicomTransformation):
     '''
     Check if pixel intensities are stored as `MONOCHROME2` (white = max, black = min).
-    DICOM images must be stored with either `MONOCHROME1` or `MONOCHROME2` as their `Photometric Interpretation`.
-    If stored as `MONOCHROME1`, intensities are inverted to match `MONOCHROME2`.
+    `Photometric Interpretation` of DICOM images must be either `MONOCHROME1` or `MONOCHROME2`.
+    If stored as `MONOCHROME1`, intensities are flipped to match `MONOCHROME2`.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        '''
-        Photometric interpretation of DICOM images must be either MONOCHROME1 or MONOCHROME2.
-        If it is MONOCHROME1, invert the pixel intensities to match the MONOCHROME2.
-        '''
-        dicom_image  = dicom_container.dicom_file_object
-        pixel_array  = dicom_container.pixel_array
-        photo_interp = dicom_image.get('PhotometricInterpretation')
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        dicom_image  = dicom.dicom_file_object
+        pixel_array  = dicom.pixel_array
+        photo_interp = dicom_image.get(ct.DicomAttributes.PHOTOMETRIC_INTERPRETATION.value)
         
-        if photo_interp == 'MONOCHROME1':
+        if photo_interp == ct.PhotometricInterpretation.MONOCHROME1.value:
             # Flip intensities
-            dicom_container.pixel_array = np.max(pixel_array) - pixel_array
-        elif photo_interp != 'MONOCHROME2':
+            dicom.pixel_array = np.max(pixel_array) - pixel_array
+        elif photo_interp != ct.PhotometricInterpretation.MONOCHROME2.value:
             raise PreprocessingException(
                 f'Photometric interpretation {photo_interp} not supported.'
             )
-        return dicom_container
+        return dicom
     
 
 class CheckVoilutFunction(DicomTransformation):
     '''
     The `VOILUTFunction` property of the DICOM image must be `LINEAR`.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        voilut_func = dicom_container.dicom_file_object.get('VOILUTFunction', 'LINEAR')
-        if voilut_func != 'LINEAR':
-            raise PreprocessingException(f'Only supporting VOILUTFunction LINEAR. Was {voilut_func}.')
-        return dicom_container
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        voilut_func = dicom.dicom_file_object.get(
+            ct.DicomAttributes.VOILUT_FUNCTION.value,
+            ct.VoilutFunction.LINEAR.value,
+        )
+        if voilut_func != ct.VoilutFunction.LINEAR.value:
+            raise PreprocessingException(
+                f'Only supporting VOILUTFunction LINEAR.'
+                f'Was: {voilut_func}.'
+            )
+        return dicom
     
 
-class ResampleToTargetResolution(DicomTransformation):
+class RescaleToTargetResolution(DicomTransformation):
     '''
     Resample image to the target resolution, as indicated by the `target_pixel_spacing`.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        source_pixel_spacing = dicom_container.source_pixel_spacing
-        target_pixel_spacing = dicom_container.target_pixel_spacing
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        source_pixel_spacing = dicom.source_pixel_spacing
+        target_pixel_spacing = dicom.target_pixel_spacing
 
-        # resample to the required resolution
         if target_pixel_spacing is not None:
-            scale_factor = source_pixel_spacing[0] / target_pixel_spacing
-            dicom_container.pixel_array = rescale(dicom_container.pixel_array, scale_factor)
-            dicom_container.pixel_spacing = [target_pixel_spacing, target_pixel_spacing]
-        return dicom_container
+            # Supporting only anisotropic pixel spacing.
+            if target_pixel_spacing[0] != target_pixel_spacing[1]:
+                raise PreprocessingException(
+                    f'Anisotropic pixel spacing is untested.'
+                    f'Was: {target_pixel_spacing}.'
+                )
+            
+            # Rescale image pixel array to match target resolution.
+            scale_factor        = source_pixel_spacing[0] / target_pixel_spacing[0]
+            dicom.pixel_array   = rescale(dicom.pixel_array, scale_factor)
+            dicom.pixel_spacing = target_pixel_spacing
+
+        return dicom
     
 
 class NormalizeIntensities(DicomTransformation):
     '''
-    Normalize pixel intensities using percentiles.
+    Normalize pixel intensities using percentiles (defaults to `[5, 95]` percentiles).
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
+    percentiles: list[float]
 
-        pixel_array = dicom_container.pixel_array
+    def __init__(self, percentiles: list[float] = [5, 95]):
+        self.percentiles = percentiles
+
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+
+        pixel_array = dicom.pixel_array
         pixel_array = pixel_array.astype(float)
 
-        percentile  = np.percentile(pixel_array.flatten(), [5, 95])
+        percentiles = np.percentile(
+            pixel_array.flatten(),
+            self.percentiles,
+        )
 
-        intensity_offset = percentile[0]
-        intensity_slope  = percentile[1] - percentile[0]
+        intensity_offset = float(percentiles[0])
+        intensity_slope  = float(percentiles[1] - percentiles[0])
 
         pixel_array -= intensity_offset
         pixel_array /= intensity_slope
 
-        dicom_container.pixel_array      = pixel_array
-        dicom_container.intensity_offset = intensity_offset
-        dicom_container.intensity_slope  = intensity_slope
+        dicom.pixel_array      = pixel_array
+        dicom.intensity_offset = intensity_offset
+        dicom.intensity_slope  = intensity_slope
 
-        return dicom_container
+        return dicom
     
 
 class GetBoneFinderPoints(DicomTransformation):
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        points_file_path = dicom_container.points_file_path
 
-        with open(points_file_path, 'r') as points_file_object:
-
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        with open(dicom.points_file_path, 'r') as points_file_object:
             lines = points_file_object.readlines()
             lines = [line.strip() for line in lines]
 
@@ -252,51 +277,49 @@ class GetBoneFinderPoints(DicomTransformation):
             version  = int(lines[0].split(' ')[1])
             n_points = int(lines[1].split(' ')[1])
             points   = np.array([
-                [float(x) for x in line.split(' ')] for line in lines[3 : (n_points + 3)]
+                [float(x) for x in line.split(' ')] 
+                    for line in lines[3 : (n_points + 3)]
             ])
 
             # Verify file structure
             if lines[0]     != f'version: {version}' \
-            or lines[1]     != f'n_points: {n_points}' \
-            or n_points     != ct.N_POINTS \
-            or len(lines)   != n_points + 4 \
-            or lines[2]     != '{' \
-            or lines[163]   != '}' \
-            or points.shape != (n_points, 2):
+                or lines[1]     != f'n_points: {n_points}' \
+                or n_points     != ct.N_BONEFINDER_POINTS \
+                or len(lines)   != n_points + 4 \
+                or lines[2]     != '{' \
+                or lines[163]   != '}' \
+                or points.shape != (n_points, 2):
                 raise PreprocessingException('Points file structure is invalid.')
 
-            dicom_container.bonefinder_points = points
+            dicom.bonefinder_points = points
 
-        return dicom_container
+        return dicom
 
 
 class GetSegmentationMasks(DicomTransformation):
     '''
     Compute the RGB pixel array of the segmentation mask,
-    highlighting the various components of the hip.
-    In the `DicomContainer` it is specified whether to compute 
-    the mask for the left, right or both sides of the hip.
+    highlighting the various components of the hip, 
+    for each of the right and left sides of the hip.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        pixel_array   = dicom_container.pixel_array
-        pixel_spacing = dicom_container.pixel_spacing
-        points        = dicom_container.bonefinder_points
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        pixel_array   = dicom.pixel_array
+        pixel_spacing = dicom.pixel_spacing
+        points        = dicom.bonefinder_points
+
+        mask_shape    = pixel_array.shape
+        mask_shape    = mask_shape[1], mask_shape[2]
 
         circles = dict()
-        for side, offset in ct.SIDES.items():
-            for name, curve in ct.SUB_CURVES.items():
+        for hip_side, offset in ct.HipSideOffset.items():
+            for curve_name, curve in ct.HipBoneSubCurve.items():
                 xc, yc, r, sigma = circle_fit.taubinSVD(points[np.array(curve) + offset])
-                circles[f'{side} {name}'] = { 'xc': xc, 'yc': yc, 'r': r, 'sigma': sigma }
+                circles[f'{hip_side}_{curve_name}'] = { 'xc': xc, 'yc': yc, 'r': r, 'sigma': sigma }
 
-        js_bbox = {}
-        for side, offset in ct.SIDES.items():
+        for hip_side, offset in ct.HipSideOffset.items():
 
-            fg_mask = np.zeros(shape=pixel_array.shape, dtype=bool)
-
-            # background label inside the bounding box
-            
             # define the bounding box of the segmentation region
-            js_bbox[side] = bbox = {
+            bbox = {
                 # top: topmost point of acetabulum curve
                 'top':     points[67 + offset][1],
                 # medial: most medial point of the sourcil
@@ -307,27 +330,16 @@ class GetSegmentationMasks(DicomTransformation):
                 'bottom':  points[27 + offset][1],
             }
 
-            # include bbox in foreground/background mask
-            fg_mask[polygon2mask(
-                fg_mask.shape,
-                np.array([
-                    [bbox['top'], bbox['lateral']],
-                    [bbox['bottom'], bbox['lateral']],
-                    [bbox['bottom'], bbox['medial']],
-                    [bbox['top'], bbox['medial']],
-                ]) / np.array(pixel_spacing)[[1, 0]]
-            )] = True
-
             # from most lateral part of the sourcil to center of femoral head
-            circle = circles[f'{side} femoral head']
+            circle = circles[f'{hip_side}_{ct.HipBoneSubCurve.FEMORAL_HEAD.name}']
 
             # define the regions
             regions = {
                 'femur': np.array([
-                    *points[np.array(ct.CURVES['proximal femur']) + offset],
+                    *points[np.array(ct.HipBoneCurve.PROXIMAL_FEMUR.value) + offset],
                 ]),
                 'acetabulum': np.array([
-                    *points[np.array(ct.CURVES['acetabular roof']) + offset],
+                    *points[np.array(ct.HipBoneCurve.ACETABULAR_ROOF.value) + offset],
                     [bbox['medial'], bbox['top']],
                 ]),
                 'joint space': np.array([
@@ -346,150 +358,156 @@ class GetSegmentationMasks(DicomTransformation):
                 ]),
             }
 
-            '''
-            Extract masks for each region.
-            '''
+            # Extract masks for each region.
             femur_mask = polygon2mask(
-                pixel_array.shape,
-                (regions['femur'] / pixel_spacing)[:, [1, 0]],
+                mask_shape,
+                (regions['femur'] / pixel_spacing[0])[:, [1, 0]],
             )
             acetabulum_mask = polygon2mask(
-                pixel_array.shape,
-                (regions['acetabulum'] / pixel_spacing)[:, [1, 0]],
+                mask_shape,
+                (regions['acetabulum'] / pixel_spacing[0])[:, [1, 0]],
             )
-
             joint_space_mask = polygon2mask(
-                pixel_array.shape,
-                (regions['joint space'] / pixel_spacing)[:, [1, 0]],
+                mask_shape,
+                (regions['joint space'] / pixel_spacing[0])[:, [1, 0]],
             )
-
-            '''
-            Create combined mask as an ndarray of masks for each region.
-            Note that the joint space mask is larger than the true area,
-            the pixels overlapping with the other regions are set to 0.
-            '''
-            combined_mask = np.zeros(shape=pixel_array.shape, dtype=np.uint8)
+            
+            # Create combined mask as an ndarray of masks for each region.
+            # Note that the joint space mask is larger than the true area,
+            # the pixels overlapping with the other regions are set to 0.
+            combined_mask = np.zeros(shape=mask_shape, dtype=np.uint8)
             combined_mask = combined_mask[None]
             combined_mask = np.repeat(combined_mask, repeats=len(regions), axis=0)
 
             combined_mask[0][femur_mask]       = 1
-
             combined_mask[1][acetabulum_mask]  = 1
-
             combined_mask[2][joint_space_mask] = 1
+
             combined_mask[2][femur_mask]       = 0
             combined_mask[2][acetabulum_mask]  = 0
 
-            # combined_mask[0][~fg_mask]         = 0
-            # combined_mask[1][~fg_mask]         = 0
-            # combined_mask[2][~fg_mask]         = 0
-        
-            '''
-            Assign the combined mask to the current side of the body being segmented.
-            '''
-            if side == 'left':
-                dicom_container.left_segmentation_mask = combined_mask
-            elif side == 'right':
-                dicom_container.right_segmentation_mask = combined_mask
+            # Assign the combined mask to the current side of the body being segmented.
+            if hip_side == ct.HipSide.RIGHT.name:
+                dicom.right_segmentation_mask = combined_mask
+            elif hip_side == ct.HipSide.LEFT.name:
+                dicom.left_segmentation_mask = combined_mask
             else:
-                raise RuntimeError(f'Side must be either `left` or `right`. Was `{side}`')
-        
-        return dicom_container
+                raise PreprocessingException(
+                    f'Side must be either `\'{ct.HipSide.RIGHT.value}\'` or `\'{ct.HipSide.LEFT.value}\'`.'
+                    f'Was: `{hip_side}`'
+                )
+        return dicom
     
 
-class FlipHorizontally(DicomTransformation):
+class Flip(DicomTransformation):
     '''
-    Flip the pixel array and the segmentation masks for both sides horizontally.
+    Flip the pixel array and the segmentation masks for both sides.
+    By default, the flip occurs horizontally.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
-        dicom_container.pixel_array = np.flip(
-            dicom_container.pixel_array, 
-            axis=1,
+    axis: int
+
+    def __init__(self, axis: int = 2) -> None:
+        super().__init__()
+        self.axis = axis
+
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        dicom.pixel_array = np.flip(
+            dicom.pixel_array, 
+            axis=self.axis,
         )
-        dicom_container.right_segmentation_mask = np.flip(
-            dicom_container.right_segmentation_mask, 
-            axis=2,
+        dicom.right_segmentation_mask = np.flip(
+            dicom.right_segmentation_mask, 
+            axis=self.axis,
         )
-        dicom_container.left_segmentation_mask = np.flip(
-            dicom_container.left_segmentation_mask, 
-            axis=2,
+        dicom.left_segmentation_mask = np.flip(
+            dicom.left_segmentation_mask, 
+            axis=self.axis,
         )
-        dicom_container.is_flipped_horizontally = \
-            not dicom_container.is_flipped_horizontally
-        return dicom_container
+        return dicom
 
 
 class AppendDicomToHDF5(DicomTransformation):
     '''
     Write the information contained within the given `DicomContainer` to the HDF5 file indicated by the same `DicomContainer`.
     '''
-    def __call__(self, dicom_container: DicomContainer) -> DicomContainer:
+    hip_side: ct.HipSide
 
-        dicom_file_path         = dicom_container.dicom_file_path
-        points_file_path        = dicom_container.points_file_path
-        hdf5_file_object        = dicom_container.hdf5_file_object
+    def __init__(self, hip_side: ct.HipSide) -> None:
+        super().__init__()
+        self.hip_side = hip_side
+        return
 
-        dataset                 = dicom_container.dataset
-        subject_id              = dicom_container.subject_id
-        subject_visit           = dicom_container.subject_visit
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
 
-        dicom_file_object       = dicom_container.dicom_file_object
-        pixel_array             = dicom_container.pixel_array
-        bonefinder_points       = dicom_container.bonefinder_points
-        right_segmentation_mask = dicom_container.right_segmentation_mask
-        left_segmentation_mask  = dicom_container.left_segmentation_mask
+        dicom_file_path         = dicom.dicom_file_path
+        points_file_path        = dicom.points_file_path
+        hdf5_file_object        = dicom.hdf5_file_object
 
-        source_pixel_spacing    = dicom_container.source_pixel_spacing
-        target_pixel_spacing    = dicom_container.target_pixel_spacing
-        pixel_spacing           = dicom_container.pixel_spacing
+        dataset                 = dicom.dataset
+        subject_id              = dicom.subject_id
+        subject_visit           = dicom.subject_visit
 
-        intensity_slope         = dicom_container.intensity_slope
-        intensity_offset        = dicom_container.intensity_offset
-        is_flipped_horizontally = dicom_container.is_flipped_horizontally
+        dicom_file_object       = dicom.dicom_file_object
+        pixel_array             = dicom.pixel_array
+        bonefinder_points       = dicom.bonefinder_points
+        right_segmentation_mask = dicom.right_segmentation_mask
+        left_segmentation_mask  = dicom.left_segmentation_mask
+
+        source_pixel_spacing    = dicom.source_pixel_spacing
+        target_pixel_spacing    = dicom.target_pixel_spacing
+        pixel_spacing           = dicom.pixel_spacing
+
+        intensity_slope         = dicom.intensity_slope
+        intensity_offset        = dicom.intensity_offset
 
         # Infer which hip side is to be segmented
-        hip_side: Literal['right', 'left']
         segmentation_mask: np.ndarray
-        if is_flipped_horizontally:
-            hip_side = 'left'
+        if self.hip_side == ct.HipSide.RIGHT:
+            segmentation_mask = right_segmentation_mask
+        elif self.hip_side == ct.HipSide.LEFT:
             segmentation_mask = left_segmentation_mask
         else:
-            hip_side = 'right'
-            segmentation_mask = right_segmentation_mask
+            raise PreprocessingException(
+                f'Hip side can be either `\'{ct.HipSide.RIGHT.value}\'` or `\'{ct.HipSide.LEFT.value}\'`.'
+                f'Was: {self.hip_side.value}.'
+            )
 
-        # Write to hdf5
-        group_id = f'/scans/{dataset}/{subject_id}/{subject_visit}/{hip_side}'
-        group = hdf5_file_object.require_group(group_id)
+        # Write to hdf5:
+        group_id = f'/scans/{dataset}/{subject_id}/{subject_visit}/{self.hip_side.value}'
+        group    = hdf5_file_object.require_group(group_id)
 
-        group.attrs['dicom_file_path'] = dicom_file_path
-        group.attrs['points_file_path'] = points_file_path
+        # Write meta info
+        group.attrs['dicom_file_path']         = dicom_file_path
+        group.attrs['points_file_path']        = points_file_path
         # group.attrs['hdf5_file_object'] = hdf5_file_object
-        group.attrs['dataset'] = dataset
-        group.attrs['subject_id'] = subject_id
-        group.attrs['subject_visit'] = subject_visit
-        # group.attrs['dicom_file_object'] = dicom_file_object
-        # group.attrs['pixel_array'] = pixel_array
-        # group.attrs['bonefinder_points'] = bonefinder_points
+        group.attrs['dataset']                 = dataset
+        group.attrs['subject_id']              = subject_id
+        group.attrs['subject_visit']           = subject_visit
+        # group.attrs['dicom_file_object']       = dicom_file_object
+        # group.attrs['pixel_array']             = pixel_array
+        # group.attrs['bonefinder_points']       = bonefinder_points
         # group.attrs['right_segmentation_mask'] = right_segmentation_mask
-        # group.attrs['left_segmentation_mask'] = left_segmentation_mask
-        group.attrs['source_pixel_spacing'] = source_pixel_spacing
-        group.attrs['target_pixel_spacing'] = target_pixel_spacing
-        group.attrs['pixel_spacing'] = pixel_spacing
-        group.attrs['intensity_slope'] = intensity_slope
-        group.attrs['intensity_offset'] = intensity_offset
-        group.attrs['is_flipped_horizontally'] = is_flipped_horizontally
+        # group.attrs['left_segmentation_mask']  = left_segmentation_mask
+        group.attrs['source_pixel_spacing']    = source_pixel_spacing
+        group.attrs['target_pixel_spacing']    = target_pixel_spacing
+        group.attrs['pixel_spacing']           = pixel_spacing
+        group.attrs['intensity_slope']         = intensity_slope
+        group.attrs['intensity_offset']        = intensity_offset
+        group.attrs['hip_side']                = self.hip_side.value
 
+        # Write image
         img_ds = group.create_dataset(
             'image', data=pixel_array,
             **hdf5plugin.Blosc2(cname='blosclz', clevel=9, filters=hdf5plugin.Blosc2.SHUFFLE)
         )
 
+        # Write mask
         img_ds = group.create_dataset(
-            'segmentation_mask', data=segmentation_mask,
+            'mask', data=segmentation_mask,
             **hdf5plugin.Blosc2(cname='blosclz', clevel=9,filters=hdf5plugin.Blosc2.SHUFFLE)
         )
 
-        return dicom_container
+        return dicom
 
 
 class PreprocessingException(Exception):
