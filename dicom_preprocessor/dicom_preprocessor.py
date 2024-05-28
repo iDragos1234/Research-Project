@@ -111,8 +111,13 @@ class DicomPreprocessor:
                 dt.GetSourcePixelSpacing(),
                 dt.CheckPhotometricInterpretation(),
                 dt.CheckVoilutFunction(),
-                dt.RescaleToTargetResolution(),
-                dt.NormalizeIntensities(),
+
+                dt.RescaleToTargetPixelSpacing(),
+                dt.PercentilesIntensityNormalization(),
+                dt.MinMaxIntensityNormalization(),
+
+                # dt.ResizeWithPadOrCrop(),  # TODO
+
                 dt.GetBoneFinderPoints(),
                 dt.GetSegmentationMasks(),
             ])
@@ -134,16 +139,18 @@ class DicomPreprocessor:
                 )
 
                 try:
-                    # Apply the transformations base
+                    # Apply the transformations base.
                     dicom_transformations_base(dicom_container)
 
-                    # Write the unflipped image and the right hip mask to the HDF5 file
+                    # Write the unflipped image and the mask
+                    # for segmenting the right hip to the HDF5 file.
                     dt.AppendDicomToHDF5(hip_side=ct.HipSide.RIGHT)(dicom_container)
 
-                    # Flip the image and the segmentation masks
+                    # Flip the image and the segmentation masks.
                     dt.Flip()(dicom_container)
 
-                    # Write the flipped image and the flipped left hip mask to the HDF5 file
+                    # Write the flipped image and the flipped mask 
+                    # for segmenting the left hip to the HDF5 file.
                     dt.AppendDicomToHDF5(hip_side=ct.HipSide.LEFT)(dicom_container)
 
                 except dt.PreprocessingException as e:
@@ -155,74 +162,73 @@ class DicomPreprocessor:
         if self.verbose:
             print('Finished preprocessing.')
         return
-    
-    @staticmethod
-    def get_args() -> argparse.Namespace:
-        '''
-        Parse command-line arguments.
 
-        Returns
-        -------
-        (argparse.Namespace): An object containing the parsed command line arguments. 
-        '''
-        parser = argparse.ArgumentParser()
 
-        parser.add_argument(
-            '--input',
-            metavar='DIR',
-            required=True,
-            type=str,
-            help='data folder path as input',
-        )
+def get_args() -> argparse.Namespace:
+    '''
+    Parse command-line arguments.
 
-        parser.add_argument(
-            '--output',
-            metavar='HDF5',
-            required=True,
-            type=str,
-            help='output HDF5 file',
-        )
+    Returns
+    -------
+    (argparse.Namespace): An object containing the parsed command line arguments. 
+    '''
+    parser = argparse.ArgumentParser()
 
-        parser.add_argument(
-            '--target-pixel-spacing',
-            metavar='SPACING',
-            nargs=2,
-            type=float,
-            default=None,
-            help='resample image to target spacing (mm/pixel)',
-        )
+    parser.add_argument(
+        '--input',
+        metavar='DIR',
+        required=True,
+        type=str,
+        help='data folder path as input',
+    )
 
-        parser.add_argument(
-            '--target-pixel-array-shape',
-            metavar='SHAPE',
-            nargs=2,
-            type=float,
-            default=None,
-            help='resize image pixel array to target shape (#rows x #columns)',
-        )
+    parser.add_argument(
+        '--output',
+        metavar='HDF5',
+        required=True,
+        type=str,
+        help='output HDF5 file',
+    )
 
-        parser.add_argument(
-            '--limit',
-            metavar='LIMIT',
-            type=int,
-            default=None,
-            help='limit the number of samples to be preprocessed',
-        )
+    parser.add_argument(
+        '--target-pixel-spacing',
+        metavar='SPACING',
+        nargs=2,
+        type=float,
+        default=None,
+        help='resample image to target spacing (mm/pixel)',
+    )
 
-        parser.add_argument(
-            '--verbose',
-            action='store_true',
-        )
+    parser.add_argument(
+        '--target-pixel-array-shape',
+        metavar='SHAPE',
+        nargs=2,
+        type=float,
+        default=None,
+        help='resize image pixel array to target shape (#rows x #columns)',
+    )
 
-        return parser.parse_args()
+    parser.add_argument(
+        '--limit',
+        metavar='LIMIT',
+        type=int,
+        default=None,
+        help='limit the number of samples to be preprocessed',
+    )
 
+    parser.add_argument(
+        '--verbose',
+        action='store_true',
+    )
+
+    return parser.parse_args()
 
 
 if __name__ == '__main__':
 
-    args = DicomPreprocessor.get_args()
+    args = get_args()
 
-    # Set preprocessing parameters
+    # Set preprocessor parameters
     preprocessor = DicomPreprocessor(
         data_folder_path         = args.input,
         hdf5_file_path           = args.output,

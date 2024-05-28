@@ -1,7 +1,8 @@
 # Coding TODOs
 
-## Preprocessing transformation
+## Dicom Preprocessor
 - Migrate `CropOrPad` transformation from `model.py` to `dicom_transformations.py`;
+    - Add new command-line args for setting the desired image size after applying `CropOrPad`;
 - Improve transformations;
 
 ## Data splitter
@@ -16,14 +17,31 @@
 - Improve current training loop;
 - Save metrics, losses, images and masks;
 
+## Softmax-based Dice loss U-Net model
+- Implement 
+
 ## Evaluation loop
 - Improve current evaluation loop;
 
 ## JSW array calculation
 - Find bug in the min-dist method of computing the JSW array;
-    * the bug might be that the euclidean distance is applied on integers coming from the pixel indices;
+    * The bug might be that the euclidean distance is applied on integers coming from the pixel indices;
 - Try the radial projection method;
-+ DTW-based JSW
+- Try other border identification methods (ones suggested by Gijs and Kees);
++ DTW-based JSW;
 
+---------------------------------------------------------
 
 # Paper and Poster TODOs
+- Add ***Methodology section***;
+- Submit ACS assignment 4 (overdue!);
+- ACS poster session;
+    * Scheduled: Wednesday, 29th of May 2024;
+- Submit ***Poster/Paper Draft V1***;
+    * Deadline: Monday, 3rd of June 2024;
+
+---------------------------------------------------------
+
+# 29th of May 2024 TODOs
+- Implement `ResizeWithPadOrCrop` DICOM transformation;
+- Go do ACS Poster session;

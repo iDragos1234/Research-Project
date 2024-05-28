@@ -2,13 +2,11 @@
 Transformations for the DICOM files and BoneFinder generated points files.
 '''
 from typing import Literal, Union
-from matplotlib import pyplot as plt
 import numpy as np
 from pydicom import dcmread, FileDataset 
 from pydicom.dicomdir import DicomDir
 from skimage.transform import rescale
-import hdf5plugin
-import h5py
+import h5py, hdf5plugin
 import circle_fit
 from skimage.draw import polygon2mask
 
@@ -44,6 +42,7 @@ class DicomContainer:
     subject_visit: str
     
     dicom_file_object: DicomFileObject
+
     pixel_array: np.ndarray
     bonefinder_points: np.array
     right_segmentation_mask: np.ndarray
@@ -57,9 +56,6 @@ class DicomContainer:
     target_pixel_array_shape: tuple[float, float]
     pixel_array_shape: tuple[float, float]
 
-    intensity_offset: float
-    intensity_slope: float
-
     def __init__(self,
         dicom_file_path: str,
         points_file_path: str,
@@ -69,8 +65,6 @@ class DicomContainer:
         subject_visit: str,
         target_pixel_spacing: tuple[float, float],
         target_pixel_array_shape: tuple[float, float], 
-        intensity_slope: float = 1.0,
-        intensity_offset: float = 0.0,
     ) -> None:
         self.dicom_file_path          = dicom_file_path
         self.points_file_path         = points_file_path
@@ -82,9 +76,6 @@ class DicomContainer:
 
         self.target_pixel_spacing     = target_pixel_spacing
         self.target_pixel_array_shape = target_pixel_array_shape
-
-        self.intensity_slope          = intensity_slope
-        self.intensity_offset         = intensity_offset
 
         return
 
@@ -210,7 +201,7 @@ class CheckVoilutFunction(DicomTransformation):
         return dicom
     
 
-class RescaleToTargetResolution(DicomTransformation):
+class RescaleToTargetPixelSpacing(DicomTransformation):
     '''
     Resample image to the target resolution, as indicated by the `target_pixel_spacing`.
     '''
@@ -234,9 +225,10 @@ class RescaleToTargetResolution(DicomTransformation):
         return dicom
     
 
-class NormalizeIntensities(DicomTransformation):
+class PercentilesIntensityNormalization(DicomTransformation):
     '''
-    Normalize pixel intensities using percentiles (defaults to `[5, 95]` percentiles).
+    Normalize pixel intensities using percentiles normalization
+    (defaults to `[5, 95]` percentiles).
     '''
     percentiles: list[float]
 
@@ -260,11 +252,36 @@ class NormalizeIntensities(DicomTransformation):
         pixel_array /= intensity_slope
 
         dicom.pixel_array      = pixel_array
-        dicom.intensity_offset = intensity_offset
-        dicom.intensity_slope  = intensity_slope
 
         return dicom
     
+
+class MinMaxIntensityNormalization(DicomTransformation):
+    '''
+    Normalize pixel intensities using MinMax normalization
+    (i.e., pixels values will be in the interval `[0.0, 1.0]`).
+    '''
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        minv = np.min(dicom.pixel_array)
+        maxv = np.max(dicom.pixel_array)
+        dicom.pixel_array = (dicom.pixel_array - minv) / (maxv - minv)
+        return dicom
+    
+
+class ZScoreIntensityNormalization(DicomTransformation):
+    '''
+    Normalize pixel intensities Z-Score normalization.
+    '''
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+        mu    = np.mean(dicom.pixel_array)
+        sigma = np.std(dicom.pixel_array)
+        dicom.pixel_array = (dicom.pixel_array - mu) / sigma
+        return dicom
+
+
+class ResizeWithPadOrCrop(DicomTransformation):
+    ...  # TODO
+
 
 class GetBoneFinderPoints(DicomTransformation):
 
@@ -397,7 +414,7 @@ class GetSegmentationMasks(DicomTransformation):
                     f'Was: `{hip_side}`'
                 )
         return dicom
-    
+
 
 class Flip(DicomTransformation):
     '''
@@ -428,7 +445,8 @@ class Flip(DicomTransformation):
 
 class AppendDicomToHDF5(DicomTransformation):
     '''
-    Write the information contained within the given `DicomContainer` to the HDF5 file indicated by the same `DicomContainer`.
+    Write the information contained within the given `DicomContainer`
+    to the HDF5 file indicated by the same `DicomContainer`.
     '''
     hip_side: ct.HipSide
 
@@ -456,9 +474,6 @@ class AppendDicomToHDF5(DicomTransformation):
         source_pixel_spacing    = dicom.source_pixel_spacing
         target_pixel_spacing    = dicom.target_pixel_spacing
         pixel_spacing           = dicom.pixel_spacing
-
-        intensity_slope         = dicom.intensity_slope
-        intensity_offset        = dicom.intensity_offset
 
         # Infer which hip side is to be segmented
         segmentation_mask: np.ndarray
@@ -491,8 +506,6 @@ class AppendDicomToHDF5(DicomTransformation):
         group.attrs['source_pixel_spacing']    = source_pixel_spacing
         group.attrs['target_pixel_spacing']    = target_pixel_spacing
         group.attrs['pixel_spacing']           = pixel_spacing
-        group.attrs['intensity_slope']         = intensity_slope
-        group.attrs['intensity_offset']        = intensity_offset
         group.attrs['hip_side']                = self.hip_side.value
 
         # Write image
