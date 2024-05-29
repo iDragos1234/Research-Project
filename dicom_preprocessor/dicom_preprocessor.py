@@ -32,9 +32,9 @@ class DicomPreprocessor:
     hdf5_file_path (h5py.File): Path to the output file - a file containing
         all the preprocessed images and segmentation masks, intended for model training.
 
-    target_pixel_spacing (float): Spacing between pixels, expressed in mm.
+    target_pixel_spacing (tuple[float, float], optional): Spacing between pixels, expressed in mm.
 
-    target_pixel_array_shape (tuple[float, float], optional): Desired image and mask shape
+    target_pixel_array_shape (tuple[int, int], optional): Desired image and mask shape
         after applying the `monai.transforms.ResizeWithPadOrCrop` transformation.
         If `None`, no resizing operation is applied.
 
@@ -52,7 +52,6 @@ class DicomPreprocessor:
 
     get_args (static method): Parse the command-line arguments.
     '''
-
     data_folder_path: str
     hdf5_file_path: h5py.File
     target_pixel_spacing: tuple[float, float]
@@ -64,7 +63,7 @@ class DicomPreprocessor:
         data_folder_path: str,
         hdf5_file_path: h5py.File,
         target_pixel_spacing: tuple[float, float],
-        target_pixel_array_shape: tuple[float, float],
+        target_pixel_array_shape: tuple[int, int],
         samples_limit: Union[float, None],
         verbose: bool,
     ) -> None:
@@ -112,14 +111,15 @@ class DicomPreprocessor:
                 dt.CheckPhotometricInterpretation(),
                 dt.CheckVoilutFunction(),
 
-                dt.RescaleToTargetPixelSpacing(),
-                dt.PercentilesIntensityNormalization(),
+                dt.RescaleToTargetPixelSpacing(self.target_pixel_spacing),
+                dt.PercentilesIntensityNormalization(percentiles=[5, 95]),
                 dt.MinMaxIntensityNormalization(),
-
-                # dt.ResizeWithPadOrCrop(),  # TODO
 
                 dt.GetBoneFinderPoints(),
                 dt.GetSegmentationMasks(),
+
+                dt.PadSymmetrically(self.target_pixel_array_shape),
+                # dt.ResizeWithPadOrCrop(),  # TODO
             ])
 
             for meta in tqdm.tqdm(dicom_files_metadata):
@@ -134,8 +134,6 @@ class DicomPreprocessor:
                     dataset                  = dataset,
                     subject_id               = subject_id,
                     subject_visit            = subject_visit,
-                    target_pixel_spacing     = self.target_pixel_spacing,
-                    target_pixel_array_shape = self.target_pixel_array_shape,
                 )
 
                 try:
@@ -147,7 +145,7 @@ class DicomPreprocessor:
                     dt.AppendDicomToHDF5(hip_side=ct.HipSide.RIGHT)(dicom_container)
 
                     # Flip the image and the segmentation masks.
-                    dt.Flip()(dicom_container)
+                    dt.Flip(axis=-1)(dicom_container)
 
                     # Write the flipped image and the flipped mask 
                     # for segmenting the left hip to the HDF5 file.
@@ -203,7 +201,7 @@ def get_args() -> argparse.Namespace:
         '--target-pixel-array-shape',
         metavar='SHAPE',
         nargs=2,
-        type=float,
+        type=int,
         default=None,
         help='resize image pixel array to target shape (#rows x #columns)',
     )
