@@ -241,17 +241,6 @@ class MinMaxIntensityNormalization(DicomTransformation):
         return dicom
     
 
-class ZScoreIntensityNormalization(DicomTransformation):
-    '''
-    Normalize image pixel intensities Z-Score normalization.
-    '''
-    def __call__(self, dicom: DicomContainer) -> DicomContainer:
-        mu    = np.mean(dicom.pixel_array)
-        sigma = np.std(dicom.pixel_array)
-        dicom.pixel_array = (dicom.pixel_array - mu) / sigma
-        return dicom
-
-
 class RescaleToTargetPixelSpacing(DicomTransformation):
     '''
     Rescale image to the target resolution.
