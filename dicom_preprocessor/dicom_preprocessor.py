@@ -1,4 +1,4 @@
-"""
+'''
 Preprocessor gateway.
 How to run:
 * open a bash terminal;
@@ -12,9 +12,9 @@ python ./dicom_preprocessor/dicom_preprocessor.py \
     --target-pixel-array-shape 512 512 \
     --verbose
 ```
-"""
+'''
 from typing import Union
-import h5py, argparse, tqdm
+import h5py, argparse, tqdm, time
 
 import list_dicom_files
 import dicom_transformations as dt
@@ -44,14 +44,6 @@ class DicomPreprocessor:
         If `None`, all samples are considered.
 
     verbose (bool): Whether the preprocessor prints debugging messages.
-
-    Methods
-    -------
-    __init__: Constructor; initialize parameters of the preprocessor.
-
-    __call__: Perform preprocessing.
-
-    get_args (static method): Parse the command-line arguments.
     '''
     data_folder_path: str
     hdf5_file_path: h5py.File
@@ -86,7 +78,7 @@ class DicomPreprocessor:
                 f'  hdf5_file_path           = {self.hdf5_file_path}\n'
                 f'  target_pixel_spacing     = {self.target_pixel_spacing}\n'
                 f'  target_pixel_array_shape = {self.target_pixel_array_shape}\n'
-                f'  samples_limit            = {self.samples_limit}\n'
+                f'  samples_limit            = {self.samples_limit}'
             )
         return
 
@@ -94,8 +86,18 @@ class DicomPreprocessor:
         if self.verbose:
             print('Starting preprocessing...')
 
+        # Keep track of certain stats during preprocessing.
+        stats = {
+            'start time': time.time(),
+            'ellapsed time': None,
+            'num erronous files': 0,
+            'num preprocessed files': 0,
+            'total num files': None
+        }
+
         # List the metadata of all DICOM files
-        dicom_files_metadata = list_dicom_files.ListDicomFiles()(self.data_folder_path)
+        dicom_files_metadata = list_dicom_files.ListDicomFiles(self.data_folder_path)()
+        stats['total num files'] = len(dicom_files_metadata)
 
         # If `samples_limit` is specified, take the first `samples_limit` number of files.
         # If `samples_limit` is `None`, all files are considered.
@@ -123,7 +125,6 @@ class DicomPreprocessor:
                 dt.GetSegmentationMasks(),
 
                 dt.PadSymmetrically(self.target_pixel_array_shape),
-                # dt.ResizeWithPadOrCrop(),  # TODO
             ])
 
             for meta in tqdm.tqdm(dicom_files_metadata):
@@ -155,14 +156,25 @@ class DicomPreprocessor:
                     # for segmenting the left hip to the HDF5 file.
                     dt.AppendDicomToHDF5(hip_side=ct.HipSide.LEFT)(dicom_container)
 
+                    stats['num preprocessed files'] += 1
+
                 except dt.PreprocessingException as e:
+                    stats['num erronous files'] += 1
                     if self.verbose:
                         print(e)
 
             hdf5_file_object.close()
         
+        stats['ellapsed time'] = time.time() - stats['start time']
         if self.verbose:
-            print('Finished preprocessing.')
+            print(
+                f'Finished preprocessing.\n'
+                f'Stats:\n'
+                f'  - Ellapsed time:                {stats['ellapsed time']:.4f}s;\n'
+                f'  - Total number of files:        {stats['total num files']};\n'
+                f'  - Number of preprocessed files: {stats['num preprocessed files']};\n'
+                f'  - Number of erronous files:     {stats['num erronous files']};'
+            )
         return
 
 
@@ -178,7 +190,6 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument(
         '--input',
-        metavar='DIR',
         required=True,
         type=str,
         help='data folder path as input',
@@ -186,15 +197,13 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument(
         '--output',
-        metavar='HDF5',
         required=True,
         type=str,
-        help='output HDF5 file',
+        help='output HDF5 filepath',
     )
 
     parser.add_argument(
         '--percentile-normalization',
-        metavar='PERCENTILE_NORMALIZATION',
         nargs=2,
         type=float,
         default=None,
@@ -203,7 +212,6 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument(
         '--target-pixel-spacing',
-        metavar='SPACING',
         nargs=2,
         type=float,
         default=None,
@@ -212,7 +220,6 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument(
         '--target-pixel-array-shape',
-        metavar='SHAPE',
         nargs=2,
         type=int,
         default=None,
@@ -221,7 +228,6 @@ def get_args() -> argparse.Namespace:
 
     parser.add_argument(
         '--limit',
-        metavar='LIMIT',
         type=int,
         default=None,
         help='limit the number of samples to be preprocessed',

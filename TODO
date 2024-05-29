@@ -1,9 +1,10 @@
 # Coding TODOs
 
 ## Dicom Preprocessor
-- Migrate `CropOrPad` transformation from `model.py` to `dicom_transformations.py`;
-    - Add new command-line args for setting the desired image size after applying `CropOrPad`;
-- Improve transformations;
++ Migrate `CropOrPad` transformation from `model.py` to `dicom_transformations.py`;
+    + Add new command-line args for setting the desired image size after applying `CropOrPad`;
+    * Note: I only implemented `Pad` since `Crop` likely to give unwanted results;
++ Improve transformations;
 
 ## Data splitter
 - Train/valid/test data splitter;
@@ -43,5 +44,10 @@
 ---------------------------------------------------------
 
 # 29th of May 2024 TODOs
-- Implement `ResizeWithPadOrCrop` DICOM transformation;
-- Go do ACS Poster session;
++ Implement `ResizeWithPadOrCrop` DICOM transformation;
+    * Note: I only implemented `Pad` since `Crop` likely to give unwanted results;
++ Go do ACS Paper session;
+    * 13:45 - 15:30, online;
+- Read more on pixel intensity normalization methods (Min-Max, Z-Score, Percentiles etc.);
+- Read mails from Gijs;
+- Implement methods for computing the JSW array;
