@@ -185,22 +185,30 @@ class PercentilesIntensityNormalization(DicomTransformation):
 
     Attributes
     ----------
-    percentiles (tuple[float, float]): The percentiles;
-        taken from the interval [0.0, 100.0]
+    percentiles (tuple[float, float], optional): The percentiles;
+        taken from the interval [0.0, 100.0].
+        If unspecified, do nothing.
     
     Raises
     ------
-    PreprocessingException: If the percentiles are not
-        in the interval `[0.0, 100.0]`.
+    PreprocessingException: 
+        If the percentiles are not in the interval `[0.0, 100.0]`.
+        If there are not exactly two percentiles.
     '''
     percentiles: tuple[float, float]
 
     def __init__(self, percentiles: tuple[float, float]) -> None:
-        if not all(0.0 <= p <= 100.0 for p in percentiles):
-            raise PreprocessingException('Percentiles must be in the interval [0.0, 100.0].')
+        if percentiles is not None:
+            if not all(0.0 <= p <= 100.0 for p in percentiles):
+                raise PreprocessingException('Percentiles must be in the interval [0.0, 100.0].')
+            if len(percentiles) != 2:
+                raise PreprocessingException('Accepting exactly two percentiles.')
         self.percentiles = percentiles
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
+
+        if self.percentiles is None:
+            return dicom
 
         pixel_array = dicom.pixel_array
         pixel_array = pixel_array.astype(float)
@@ -264,7 +272,8 @@ class RescaleToTargetPixelSpacing(DicomTransformation):
 
     def __init__(self, target_pixel_spacing: tuple[float, float]=None) -> None:
         # Supporting only anisotropic pixel spacing.
-        if target_pixel_spacing[0] != target_pixel_spacing[1]:
+        if target_pixel_spacing is not None \
+            and target_pixel_spacing[0] != target_pixel_spacing[1]:
             raise PreprocessingException(
                 f'Anisotropic pixel spacing is not supported.'
                 f'Was: {target_pixel_spacing}.'

@@ -7,8 +7,9 @@ How to run:
 python ./dicom_preprocessor/dicom_preprocessor.py \
     --input "./data" \
     --output "./output.h5" \
-    --target-pixel-spacing (1, 1) \
-    --target-pixel-array-shape (256, 256) \
+    --percentile-normalization 5 95 \
+    --target-pixel-spacing 0.9 0.9 \
+    --target-pixel-array-shape 512 512 \
     --verbose
 ```
 """
@@ -54,16 +55,18 @@ class DicomPreprocessor:
     '''
     data_folder_path: str
     hdf5_file_path: h5py.File
-    target_pixel_spacing: tuple[float, float]
-    target_pixel_array_shape: tuple[float, float]
+    target_pixel_spacing: Union[tuple[float, float], None]
+    target_pixel_array_shape: Union[tuple[int, int], None]
+    percentile_normalization: Union[tuple[float, float], None]
     samples_limit: float
     verbose: bool
 
     def __init__(self,
         data_folder_path: str,
         hdf5_file_path: h5py.File,
-        target_pixel_spacing: tuple[float, float],
-        target_pixel_array_shape: tuple[int, int],
+        target_pixel_spacing: Union[tuple[float, float], None],
+        target_pixel_array_shape: Union[tuple[int, int], None],
+        percentile_normalization: Union[tuple[float, float], None],
         samples_limit: Union[float, None],
         verbose: bool,
     ) -> None:
@@ -72,6 +75,7 @@ class DicomPreprocessor:
         self.hdf5_file_path           = hdf5_file_path
         self.target_pixel_spacing     = target_pixel_spacing
         self.target_pixel_array_shape = target_pixel_array_shape
+        self.percentile_normalization = percentile_normalization
         self.samples_limit            = samples_limit
         self.verbose                  = verbose
 
@@ -112,7 +116,7 @@ class DicomPreprocessor:
                 dt.CheckVoilutFunction(),
 
                 dt.RescaleToTargetPixelSpacing(self.target_pixel_spacing),
-                dt.PercentilesIntensityNormalization(percentiles=[5, 95]),
+                dt.PercentilesIntensityNormalization(self.percentile_normalization),
                 dt.MinMaxIntensityNormalization(),
 
                 dt.GetBoneFinderPoints(),
@@ -189,6 +193,15 @@ def get_args() -> argparse.Namespace:
     )
 
     parser.add_argument(
+        '--percentile-normalization',
+        metavar='PERCENTILE_NORMALIZATION',
+        nargs=2,
+        type=float,
+        default=None,
+        help='two percentiles for the percentile intensity normalization; must be in the interval [0.0, 100.0]',
+    )
+
+    parser.add_argument(
         '--target-pixel-spacing',
         metavar='SPACING',
         nargs=2,
@@ -230,8 +243,9 @@ if __name__ == '__main__':
     preprocessor = DicomPreprocessor(
         data_folder_path         = args.input,
         hdf5_file_path           = args.output,
-        target_pixel_spacing     = tuple(args.target_pixel_spacing),
-        target_pixel_array_shape = tuple(args.target_pixel_array_shape),
+        target_pixel_spacing     = tuple(args.target_pixel_spacing) if args.target_pixel_spacing is not None else None,
+        target_pixel_array_shape = tuple(args.target_pixel_array_shape) if args.target_pixel_array_shape is not None else None,
+        percentile_normalization = tuple(args.percentile_normalization) if args.percentile_normalization is not None else None,
         samples_limit            = args.limit,
         verbose                  = args.verbose,
     )
