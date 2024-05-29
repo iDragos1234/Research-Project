@@ -1,57 +1,82 @@
-from enum import Enum
-from functools import cached_property
 import re
+from typing import override
 
 
 N_BONEFINDER_POINTS = 160
 
 
-class ExtEnum(Enum):
-    @classmethod
-    def values(self):
-        return list(item.value for item in self)
-    
-    @classmethod
-    def items(self):
-        return list((item.name, item.value) for item in self)
+class MyEnum:
+    def items():
+        ...
 
 
-class HipSide(ExtEnum):
+class HipSide(MyEnum):
     RIGHT = 'right'
     LEFT  = 'left'
 
+    @override
+    def items():
+        return [HipSide.RIGHT, HipSide.LEFT]
 
-class Dataset(ExtEnum):
+
+class Dataset(MyEnum):
     CHECK = 'CHECK'
     OAI   = 'OAI'
 
+    @override
+    def items():
+        return [Dataset.CHECK, Dataset.OAI]
 
-class FilenamePattern(ExtEnum):
+
+class FilenameRegex(MyEnum):
     CHECK = re.compile('(?P<subject_id>[0-9]+)_(?P<subject_visit>T[0-9]+)_APO.dcm')
     OAI   = re.compile('OAI-(?P<subject_id>[0-9]+)-(?P<subject_visit>V[0-9]+)-[0-9]+.dcm')
 
 
-class HipSideOffset(ExtEnum):
-    RIGHT = 0
-    LEFT  = 80
+class HipSideOffset(MyEnum):
+    RIGHT = (HipSide.RIGHT, 0)
+    LEFT  = (HipSide.LEFT, 80)
+
+    @override
+    def items():
+        return [HipSideOffset.RIGHT, HipSideOffset.LEFT]
 
 
-class HipBoneCurve(ExtEnum):
-    PROXIMAL_FEMUR     = list(range(0, 35))
-    GREATER_TROCHANTER = [6] + list(range(35, 40))
-    POSTERIOR_WALL     = list(range(40, 45))
-    ISCHIUM_AND_PUBIS  = list(range(44, 60))
-    FORAMEN            = list(range(60, 67))
-    ACETABULAR_ROOF    = list(range(67, 75))
-    TEARDROP           = list(range(75, 80))
+class HipBoneCurve(MyEnum):
+    PROXIMAL_FEMUR     = ('proximal femur',     list(range(0, 35)))
+    GREATER_TROCHANTER = ('greater trochanter', [6] + list(range(35, 40)))
+    POSTERIOR_WALL     = ('posterior wall',     list(range(40, 45)))
+    ISCHIUM_AND_PUBIS  = ('ischium and pubis',  list(range(44, 60)))
+    FORAMEN            = ('foramen',            list(range(60, 67)))
+    ACETABULAR_ROOF    = ('acetabular roof',    list(range(67, 75)))
+    TEARDROP           = ('teardrop',           list(range(75, 80)))
+
+    @override
+    def items():
+        return [
+            HipBoneCurve.PROXIMAL_FEMUR,
+            HipBoneCurve.GREATER_TROCHANTER,
+            HipBoneCurve.POSTERIOR_WALL,
+            HipBoneCurve.ISCHIUM_AND_PUBIS,
+            HipBoneCurve.FORAMEN,
+            HipBoneCurve.ACETABULAR_ROOF,
+            HipBoneCurve.TEARDROP,
+        ]
 
 
-class HipBoneSubCurve(ExtEnum):
-    FEMORAL_HEAD       = list(range(18, 28))
-    SOURCIL            = list(range(70, 75))
+class HipBoneSubCurve(MyEnum):
+    FEMORAL_HEAD = ('femoral head', list(range(18, 28)))
+    SOURCIL      = ('sourcil',      list(range(70, 75)))
+
+    @override
+    def items():
+        return [
+            HipBoneSubCurve.FEMORAL_HEAD,
+            HipBoneSubCurve.SOURCIL,
+        ]
 
 
-class MaskLabel(ExtEnum):
+class MaskLabel:
     IGNORE      = 0
     BACKGROUND  = 1
     ACETABULUM  = 2
@@ -59,25 +84,17 @@ class MaskLabel(ExtEnum):
     JOINT_SPACE = 4
 
 
-class MaskLabelColorRGB(ExtEnum):
-    IGNORE      = [0, 0, 0]
-    BACKGROUND  = [1, 0, 0]
-    ACETABULUM  = [1, 1, 0]
-    FEMUR       = [1, 0, 1]
-    JOINT_SPACE = [0, 0, 1]
-
-
-class DicomAttributes(ExtEnum):
+class DicomAttributes(MyEnum):
     PIXEL_SPACING              = 'PixelSpacing'
     IMAGER_PIXEL_SPACING       = 'ImagerPixelSpacing'
     PHOTOMETRIC_INTERPRETATION = 'PhotometricInterpretation'
     VOILUT_FUNCTION            = 'VOILUTFunction'
 
 
-class PhotometricInterpretation(ExtEnum):
+class PhotometricInterpretation(MyEnum):
     MONOCHROME1 = 'MONOCHROME1'
     MONOCHROME2 = 'MONOCHROME2'
 
 
-class VoilutFunction(ExtEnum):
+class VoilutFunction(MyEnum):
     LINEAR = 'LINEAR'

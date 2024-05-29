@@ -122,8 +122,8 @@ class GetSourcePixelSpacing(DicomTransformation):
     '''
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
         pixel_spacing: tuple[float, float] = tuple(
-            dicom.dicom_file_object.get(ct.DicomAttributes.PIXEL_SPACING.value) or \
-            dicom.dicom_file_object.get(ct.DicomAttributes.IMAGER_PIXEL_SPACING.value)
+            dicom.dicom_file_object.get(ct.DicomAttributes.PIXEL_SPACING) or \
+            dicom.dicom_file_object.get(ct.DicomAttributes.IMAGER_PIXEL_SPACING)
         )
         
         if pixel_spacing is None:
@@ -150,12 +150,12 @@ class CheckPhotometricInterpretation(DicomTransformation):
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
         dicom_image  = dicom.dicom_file_object
         pixel_array  = dicom.pixel_array
-        photo_interp = dicom_image.get(ct.DicomAttributes.PHOTOMETRIC_INTERPRETATION.value)
+        photo_interp = dicom_image.get(ct.DicomAttributes.PHOTOMETRIC_INTERPRETATION)
         
-        if photo_interp == ct.PhotometricInterpretation.MONOCHROME1.value:
+        if photo_interp == ct.PhotometricInterpretation.MONOCHROME1:
             # Flip intensities
             dicom.pixel_array = np.max(pixel_array) - pixel_array
-        elif photo_interp != ct.PhotometricInterpretation.MONOCHROME2.value:
+        elif photo_interp != ct.PhotometricInterpretation.MONOCHROME2:
             raise PreprocessingException(
                 f'Photometric interpretation {photo_interp} not supported.'
             )
@@ -168,10 +168,10 @@ class CheckVoilutFunction(DicomTransformation):
     '''
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
         voilut_func = dicom.dicom_file_object.get(
-            ct.DicomAttributes.VOILUT_FUNCTION.value,
-            ct.VoilutFunction.LINEAR.value,
+            ct.DicomAttributes.VOILUT_FUNCTION,
+            ct.VoilutFunction.LINEAR,
         )
-        if voilut_func != ct.VoilutFunction.LINEAR.value:
+        if voilut_func != ct.VoilutFunction.LINEAR:
             raise PreprocessingException(
                 f'Only supporting VOILUTFunction LINEAR.'
                 f'Was: {voilut_func}.'
@@ -379,15 +379,13 @@ class GetSegmentationMasks(DicomTransformation):
         pixel_array   = dicom.pixel_array
         pixel_spacing = dicom.pixel_spacing
         points        = dicom.bonefinder_points
-
-        # Mask shape.
         mask_shape    = pixel_array.shape[-2:]
 
         circles = dict()
         for hip_side, offset in ct.HipSideOffset.items():
             for curve_name, curve in ct.HipBoneSubCurve.items():
                 xc, yc, r, sigma = circle_fit.taubinSVD(points[np.array(curve) + offset])
-                circles[f'{hip_side}_{curve_name}'] = { 'xc': xc, 'yc': yc, 'r': r, 'sigma': sigma }
+                circles[f'{hip_side} {curve_name}'] = { 'xc': xc, 'yc': yc, 'r': r, 'sigma': sigma }
 
         for hip_side, offset in ct.HipSideOffset.items():
 
@@ -404,15 +402,15 @@ class GetSegmentationMasks(DicomTransformation):
             }
 
             # from most lateral part of the sourcil to center of femoral head
-            circle = circles[f'{hip_side}_{ct.HipBoneSubCurve.FEMORAL_HEAD.name}']
+            circle = circles[f'{hip_side} {ct.HipBoneSubCurve.FEMORAL_HEAD[0]}']
 
             # define the regions
             regions = {
                 'femur': np.array([
-                    *points[np.array(ct.HipBoneCurve.PROXIMAL_FEMUR.value) + offset],
+                    *points[np.array(ct.HipBoneCurve.PROXIMAL_FEMUR[1]) + offset],
                 ]),
                 'acetabulum': np.array([
-                    *points[np.array(ct.HipBoneCurve.ACETABULAR_ROOF.value) + offset],
+                    *points[np.array(ct.HipBoneCurve.ACETABULAR_ROOF[1]) + offset],
                     [bbox['medial'], bbox['top']],
                 ]),
                 'joint space': np.array([
@@ -460,13 +458,13 @@ class GetSegmentationMasks(DicomTransformation):
             combined_mask[2][acetabulum_mask]  = 0
 
             # Assign the combined mask to the current side of the body being segmented.
-            if hip_side == ct.HipSide.RIGHT.name:
+            if hip_side == ct.HipSide.RIGHT:
                 dicom.right_segmentation_mask = combined_mask
-            elif hip_side == ct.HipSide.LEFT.name:
+            elif hip_side == ct.HipSide.LEFT:
                 dicom.left_segmentation_mask = combined_mask
             else:
                 raise PreprocessingException(
-                    f'Side must be either `\'{ct.HipSide.RIGHT.value}\'` or `\'{ct.HipSide.LEFT.value}\'`.'
+                    f'Side must be either `\'{ct.HipSide.RIGHT}\'` or `\'{ct.HipSide.LEFT}\'`.'
                     f'Was: `{hip_side}`'
                 )
         return dicom
@@ -522,9 +520,9 @@ class AppendDicomToHDF5(DicomTransformation):
     Write the information contained within the given `DicomContainer`
     to the HDF5 file indicated by the same `DicomContainer`.
     '''
-    hip_side: ct.HipSide
+    hip_side: str
 
-    def __init__(self, hip_side: ct.HipSide) -> None:
+    def __init__(self, hip_side: str) -> None:
         self.hip_side = hip_side
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
@@ -553,12 +551,12 @@ class AppendDicomToHDF5(DicomTransformation):
             segmentation_mask = left_segmentation_mask
         else:
             raise PreprocessingException(
-                f'Hip side can be either `\'{ct.HipSide.RIGHT.value}\'` or `\'{ct.HipSide.LEFT.value}\'`.'
-                f'Was: {self.hip_side.value}.'
+                f'Hip side can be either `\'{ct.HipSide.RIGHT}\'` or `\'{ct.HipSide.LEFT}\'`.'
+                f'Was: {self.hip_side}.'
             )
 
         # Write to hdf5:
-        group_id = f'/scans/{dataset}/{subject_id}/{subject_visit}/{self.hip_side.value}'
+        group_id = f'/scans/{dataset}/{subject_id}/{subject_visit}/{self.hip_side}'
         group    = hdf5_file_object.require_group(group_id)
 
         # Write meta info
@@ -570,7 +568,7 @@ class AppendDicomToHDF5(DicomTransformation):
         group.attrs['source_pixel_spacing']     = source_pixel_spacing
         group.attrs['pixel_spacing']            = pixel_spacing
         group.attrs['source_pixel_array_shape'] = source_pixel_array_shape
-        group.attrs['hip_side']                 = self.hip_side.value
+        group.attrs['hip_side']                 = self.hip_side
 
         # Write image
         img_ds = group.create_dataset(

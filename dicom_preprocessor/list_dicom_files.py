@@ -37,7 +37,7 @@ class ListDicomFiles:
 
         # Find the corresponding points file
         points_file_path = re.sub(
-            f'\\\\({ct.Dataset.CHECK.value}|{ct.Dataset.OAI.value})\\\\',
+            f'\\\\({ct.Dataset.CHECK}|{ct.Dataset.OAI})\\\\',
             '\\\\\\1-pointfiles\\\\', dicom_file_path
         ) + '.pts'
 
@@ -46,13 +46,16 @@ class ListDicomFiles:
                 f'There is no file at {points_file_path}.'
             )
 
-        # Detect subject id and visit
+        # Find the filename regex corresponding to the given dataset name
         filename_regex: re.Pattern[str]
-        try:
-            filename_regex = ct.FilenamePattern[dataset_name].value
-        except AttributeError as e:
+        if dataset_name == ct.Dataset.CHECK:
+            filename_regex = ct.FilenameRegex.CHECK
+        elif dataset_name == ct.Dataset.OAI:
+            filename_regex = ct.FilenameRegex.OAI
+        else:
             raise dt.PreprocessingException(f'Unknown dataset name. Was: {dataset_name}.')
         
+        # Detect subject id and visit
         dicom_file_name = os.path.basename(dicom_file_path)
         match = filename_regex.match(dicom_file_name)
         if match:
@@ -72,7 +75,7 @@ class ListDicomFiles:
             )
         
         dicom_files_metadata: list[DicomMetaData] = []
-        for dataset_name in ct.Dataset.values():
+        for dataset_name in ct.Dataset.items():
             for subject_visit in os.listdir(f'{data_folder_path}/{dataset_name}'):
                 for dicom_file_path in glob.glob(f'{data_folder_path}/{dataset_name}/{subject_visit}/*.dcm'):
                     try:
