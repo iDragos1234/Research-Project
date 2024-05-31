@@ -189,14 +189,14 @@ def get_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
 
     parser.add_argument(
-        '--input',
+        '--input-dir',
         required=True,
         type=str,
-        help='data folder path as input',
+        help='data directory path as input',
     )
 
     parser.add_argument(
-        '--output',
+        '--output-hdf5',
         required=True,
         type=str,
         help='output HDF5 filepath',
@@ -247,8 +247,8 @@ if __name__ == '__main__':
 
     # Set preprocessor parameters
     preprocessor = DicomPreprocessor(
-        data_folder_path         = args.input,
-        hdf5_file_path           = args.output,
+        data_folder_path         = args.input_dir,
+        hdf5_file_path           = args.output_hdf5,
         target_pixel_spacing     = tuple(args.target_pixel_spacing) if args.target_pixel_spacing is not None else None,
         target_pixel_array_shape = tuple(args.target_pixel_array_shape) if args.target_pixel_array_shape is not None else None,
         percentile_normalization = tuple(args.percentile_normalization) if args.percentile_normalization is not None else None,

@@ -60,7 +60,7 @@ class DataSplitter:
 
         samples    = self._find_samples(self.hdf5_filepath)
         data_split = self._split_data(samples, self.ratios, self.seed)
-        _          = self._write_data_split_to_csv_file(data_split, self.csv_filepath)
+        _          = self._write_to_csv_file(data_split, self.csv_filepath)
 
         if self.verbose:
             print(
@@ -98,7 +98,7 @@ class DataSplitter:
         return random_split(samples, ratios, generator)
     
     @staticmethod
-    def _write_data_split_to_csv_file(
+    def _write_to_csv_file(
         data_split,
         csv_filepath: str
     ) -> None:
@@ -110,7 +110,7 @@ class DataSplitter:
 
         # Write to CSV file.    
         with open(csv_filepath, 'w') as csv_file_object:
-            csv_writer = csv.writer(csv_file_object)
+            csv_writer = csv.writer(csv_file_object, lineterminator='\n')
             csv_writer.writerow(header)
             csv_writer.writerows(rows)
         return
@@ -124,13 +124,13 @@ class DataSplitException(Exception):
 def get_args():
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        '--input',
+        '--input-hdf5',
         required=True,
         type=str,
         help='input HDF5 filepath',
     )
     parser.add_argument(
-        '--output',
+        '--output-csv',
         required=True,
         type=str,
         help='output CSV filepath',
@@ -159,8 +159,8 @@ if __name__ == '__main__':
     args = get_args()
 
     data_splitter = DataSplitter(
-        hdf5_filepath = args.input,
-        csv_filepath  = args.output,
+        hdf5_filepath = args.input_hdf5,
+        csv_filepath  = args.output_csv,
         ratios        = args.ratios,
         seed          = args.seed,
         verbose       = args.verbose,

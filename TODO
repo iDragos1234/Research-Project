@@ -51,3 +51,25 @@
 - Read more on pixel intensity normalization methods (Min-Max, Z-Score, Percentiles etc.);
 - Read mails from Gijs;
 - Implement methods for computing the JSW array;
+
+---------------------------------------------------------
+
+# Group meeting notes - 30th of May 2024
+* Take care when using the Cross Entropy loss/metric:
+    * it will pull the output values to the extremes,
+        but after applying the sigmoid, the segmentation
+        will be just as good as a Dice loss segmentation;
+    * essentially, the CE trained model might seem better
+        than the Dice one, but in reality it might not be;
+
+* Threshold activation at 0.5 -> what is the best threshold?
+
+* Predicted mask vs. real mask overlap:
+    * bottom line of femur being hard to predict;
+    * how to get around this problem?
+        * early-stop?
+        * threshold line below which we don't compute loss?
+
+* How do we handle images with fully broken hip joint or ones with prosthesis?
+
+* Loss/metric functions: Dice, CE, DiceCE, Hausdorff, IoU, Jaccard, Tversky, ...
