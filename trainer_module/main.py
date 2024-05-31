@@ -17,7 +17,6 @@ python ./data_loader/main.py \
 '''
 import argparse
 import torch
-from monai.data import DataLoader, list_data_collate
 from monai.utils import set_determinism
 
 import data_loader_builder
@@ -25,10 +24,35 @@ import models
 import trainer
 
 
-def main(
+def main():
+    args = get_args()
+
+    train(
+        hdf5_filepath           = args.input_hdf5,
+        data_split_csv_filepath = args.input_data_split_csv,
+        model_dir_path          = args.output_model_dir,
+        model_id                = args.model,
+
+        device_name             = args.device,
+
+        learning_rate           = args.learning_rate,
+        weight_decay            = args.weight_decay,
+        max_epochs              = args.max_epochs,
+        batch_size              = args.batch_size,
+        num_workers             = args.num_workers,
+        validation_interval     = args.validation_interval,
+
+        seed                    = args.seed,
+        verbose                 = args.verbose,
+    )
+
+
+
+def train(
     hdf5_filepath: str,
     data_split_csv_filepath: str,
     model_dir_path: str,
+    model_id: str,
 
     device_name: str,
 
@@ -51,7 +75,7 @@ def main(
     (
         train_data_loader,
         valid_data_loader,
-        test_data_loader,
+        test_data_loader,  # <--- Not used for training
     ) = data_loader_builder.DataLoaderBuilder(
         hdf5_filepath,
         data_split_csv_filepath,
@@ -64,7 +88,7 @@ def main(
     device = torch.device(device_name)
 
     # Fetch the selected model setting to be trained.
-    model_setting = models.UNetModel(
+    model_setting = models.MODELS[model_id](
         learning_rate,
         weight_decay,
     )
@@ -110,6 +134,13 @@ def get_args() -> argparse.Namespace:
         required=True,
         type=str,
         help='model training output directory',
+    )
+    parser.add_argument(
+        '--model',
+        required=True,
+        type=str,
+        choices=list(models.MODELS.keys()),
+        help='select the model to train',
     )
     parser.add_argument(
         '--device',
@@ -168,23 +199,4 @@ def get_args() -> argparse.Namespace:
 
 
 if __name__ == '__main__':
-
-    args = get_args()
-    
-    main(
-        hdf5_filepath           = args.input_hdf5,
-        data_split_csv_filepath = args.input_data_split_csv,
-        model_dir_path          = args.output_model_dir,
-
-        device_name             = args.device,
-
-        learning_rate           = args.learning_rate,
-        weight_decay            = args.weight_decay,
-        max_epochs              = args.max_epochs,
-        batch_size              = args.batch_size,
-        num_workers             = args.num_workers,
-        validation_interval     = args.validation_interval,
-
-        seed                    = args.seed,
-        verbose                 = args.verbose,
-    )
+    main()

@@ -1,14 +1,6 @@
-import logging
-import os
-import sys
-import tempfile
-from glob import glob
-
 from matplotlib import pyplot as plt
 import torch
-from PIL import Image
 
-import monai
 from monai.data import decollate_batch, DataLoader
 from monai.metrics import DiceMetric
 from monai.networks.nets import UNet

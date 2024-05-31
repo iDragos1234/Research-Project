@@ -7,12 +7,11 @@ from torch.utils.tensorboard import SummaryWriter
 
 from monai.data import (
     DataLoader,
-    list_data_collate,
     decollate_batch
 )
 from monai.visualize import plot_2d_or_3d_image
 
-from model_trainer.models import MyModel
+from models import MyModel
 
 
 class Trainer:

@@ -1,7 +1,7 @@
 import torch
 from monai.data import DataLoader, list_data_collate
 
-import model_trainer.dicom_dataset as dicom_dataset
+import dicom_dataset as dicom_dataset
 
 class DataLoaderBuilder:
 
