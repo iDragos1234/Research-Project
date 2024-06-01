@@ -2,22 +2,25 @@ import os, time, tqdm
 from matplotlib import pyplot as plt
 import numpy as np
 
+
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
+from monai.utils import set_determinism
+from monai.visualize import plot_2d_or_3d_image
 from monai.data import (
     DataLoader,
     decollate_batch
 )
-from monai.visualize import plot_2d_or_3d_image
 
-from models import MyModel
+import data_loader_builder
+import models
 
 
 class Trainer:
 
     def __init__(self,
-        model_setting: MyModel,
+        model_setting: models.MyModel,
         train_data_loader: DataLoader,
         valid_data_loader: DataLoader,
         device: torch.device,
@@ -286,3 +289,80 @@ class Trainer:
             )
 
         return
+
+
+class TrainerBuilder:
+
+    def __init__(self,
+        hdf5_filepath: str,
+        data_split_csv_filepath: str,
+        model_dir_path: str,
+        model_id: str,
+
+        device_name: str,
+
+        learning_rate: float,
+        weight_decay: float,
+        max_epochs: int,
+        batch_size: int,
+        num_workers: int,
+        validation_interval: int,
+
+        seed: int,
+        verbose: bool,
+    ) -> None:
+        self.hdf5_filepath = hdf5_filepath
+        self.data_split_csv_filepath = data_split_csv_filepath
+        self.model_dir_path = model_dir_path
+        self.model_id = model_id
+
+        self.device_name = device_name
+
+        self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.max_epochs = max_epochs
+        self.batch_size = batch_size
+        self.num_workers = num_workers
+        self.validation_interval = validation_interval
+
+        self.seed = seed
+        self.verbose = verbose
+
+    def build(self) -> Trainer:
+        # Set seed for reproducibility purposes.
+        set_determinism(self.seed)
+
+        # Build datasets (training, validation and testing)
+        # using the split specified in the data split CSV file.
+        (
+            train_data_loader,
+            valid_data_loader,
+            test_data_loader,  # <--- Not used for training
+        ) = data_loader_builder.DataLoaderBuilder(
+            self.hdf5_filepath,
+            self.data_split_csv_filepath,
+            self.batch_size,
+            self.num_workers,
+            self.verbose,
+        ).build()
+
+        # Get the specified device (`'cpu'` or `'cuda'`).
+        device = torch.device(self.device_name)
+
+        # Fetch the selected model setting to be trained.
+        model_setting = models.MODELS[self.model_id](
+            self.learning_rate,
+            self.weight_decay,
+        )
+
+        # Initialize model trainer with the selected model setting.
+        return Trainer(
+            model_setting,
+            train_data_loader,
+            valid_data_loader,
+            device,
+            self.max_epochs,
+            self.model_dir_path,
+            self.validation_interval,
+            self.verbose,
+        )

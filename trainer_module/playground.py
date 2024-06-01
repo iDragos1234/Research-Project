@@ -13,7 +13,7 @@ from monai.transforms import (
 )
 import dtw
 
-from model_trainer.dicom_dataset import DicomDatasetBuilder
+from dicom_dataset import DicomDatasetBuilder
 
 
 # keys = ['image', 'mask']
@@ -26,11 +26,10 @@ from model_trainer.dicom_dataset import DicomDatasetBuilder
 transformations = None
 
 
-datasets = DicomDatasetBuilder()\
-    .set_hdf5_source('C:\\Users\\drago\\Desktop\\Research-Project\\output.h5')\
-    .set_transform(transformations)\
-    .load_data()\
-    .build()
+datasets = DicomDatasetBuilder(
+    './output.h5',
+    'data_split.csv',
+).build()
 dataset = datasets[0]
 
 
@@ -44,13 +43,14 @@ if True:
 
         print('Shapes:', image.shape, mask.shape)
 
+        plt.subplot(1, 2, 1)
         plt.title(f'Plot #{idx + 1} - sample {sample_id}')
         plt.imshow(image[0])
         plt.colorbar()
-        plt.show()
 
+        plt.subplot(1, 2, 2)
         plt.title(f'Plot #{idx + 1} - sample {sample_id}')
-        plt.imshow(mask[0] + 2 * mask[1] + 3 * mask[2])
+        plt.imshow(sum((idx + 1) * submask for idx, submask in enumerate(mask)))
         plt.colorbar()
         plt.show()
 

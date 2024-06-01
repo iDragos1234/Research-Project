@@ -38,6 +38,11 @@ class DicomContainer:
 
     source_pixel_array_shape: tuple[int, int]
 
+    top_pad: int
+    bottom_pad: int
+    left_pad: int
+    right_pad: int
+
     def __init__(self,
         dicom_file_path: str,
         points_file_path: str,
@@ -52,6 +57,11 @@ class DicomContainer:
         self.dataset          = dataset
         self.subject_id       = subject_id
         self.subject_visit    = subject_visit
+
+        self.top_pad    = 0
+        self.bottom_pad = 0
+        self.left_pad   = 0
+        self.right_pad  = 0
 
 
 class DicomTransformation:
@@ -302,7 +312,7 @@ class PadSymmetrically(DicomTransformation):
     
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
         
-        current_shape = dicom.pixel_array.shape
+        current_shape = dicom.pixel_array.shape[-2:]
         target_shape  = self.target_shape
 
         # Do not pad if target_shape is unspecified.
@@ -316,23 +326,25 @@ class PadSymmetrically(DicomTransformation):
                 f'Cannot pad image with shape {current_shape} to smaller target shape {target_shape}.'
             )
         
-        vertical_pad   = target_shape[0] - current_shape[1]
-        horizontal_pad = target_shape[1] - current_shape[2]
+        vertical_pad   = target_shape[0] - current_shape[0]
+        horizontal_pad = target_shape[1] - current_shape[1]
 
-        top_pad    = vertical_pad // 2
-        bottom_pad = vertical_pad // 2 + vertical_pad % 2
-        left_pad   = horizontal_pad // 2
-        right_pad  = horizontal_pad // 2 + horizontal_pad % 2
+        dicom.top_pad    = vertical_pad // 2
+        dicom.bottom_pad = vertical_pad // 2 + vertical_pad % 2
+        dicom.left_pad   = horizontal_pad // 2
+        dicom.right_pad  = horizontal_pad // 2 + horizontal_pad % 2
 
         # Since the image and masks are 3D,
         # and the intention is to pad the 2D image
         # wrapped in the additional dimension,
         # the first dimension is not padded.
-        pad = ((0, 0), (top_pad, bottom_pad), (left_pad, right_pad))
+        pad = (
+            (0, 0),
+            (dicom.top_pad, dicom.bottom_pad),
+            (dicom.right_pad, dicom.left_pad),
+        )
 
-        dicom.pixel_array             = np.pad(dicom.pixel_array, pad)
-        dicom.right_segmentation_mask = np.pad(dicom.right_segmentation_mask, pad)
-        dicom.left_segmentation_mask  = np.pad(dicom.left_segmentation_mask, pad)
+        dicom.pixel_array = np.pad(dicom.pixel_array, pad)
         
         return dicom
 
@@ -378,6 +390,9 @@ class GetSegmentationMasks(DicomTransformation):
         pixel_spacing = dicom.pixel_spacing
         points        = dicom.bonefinder_points
         mask_shape    = pixel_array.shape[-2:]
+
+        # Account for the amount of pad added to the image.
+        pad_offset = np.array([dicom.left_pad, dicom.top_pad])
 
         circles = dict()
         for hip_side, offset in ct.HipSideOffset.items():
@@ -430,30 +445,38 @@ class GetSegmentationMasks(DicomTransformation):
             # Extract masks for each region.
             femur_mask = polygon2mask(
                 mask_shape,
-                (regions['femur'] / pixel_spacing)[:, [1, 0]],
+                (pad_offset + regions['femur'] / pixel_spacing)[:, [1, 0]],
             )
             acetabulum_mask = polygon2mask(
                 mask_shape,
-                (regions['acetabulum'] / pixel_spacing)[:, [1, 0]],
+                (pad_offset + regions['acetabulum'] / pixel_spacing)[:, [1, 0]],
             )
             joint_space_mask = polygon2mask(
                 mask_shape,
-                (regions['joint space'] / pixel_spacing)[:, [1, 0]],
+                (pad_offset + regions['joint space'] / pixel_spacing)[:, [1, 0]],
             )
+            
+            background_mask = ~(femur_mask + acetabulum_mask + joint_space_mask)
             
             # Create combined mask as an ndarray of masks for each region.
             # Note that the joint space mask is larger than the true area,
             # the pixels overlapping with the other regions are set to 0.
             combined_mask = np.zeros(shape=mask_shape, dtype=np.uint8)
             combined_mask = combined_mask[None]
-            combined_mask = np.repeat(combined_mask, repeats=len(regions), axis=0)
+            combined_mask = np.repeat(
+                combined_mask,
+                repeats = 1 + len(regions),  # <-- Also account for the background
+                axis = 0,
+            )
 
-            combined_mask[0][femur_mask]       = 1
-            combined_mask[1][acetabulum_mask]  = 1
-            combined_mask[2][joint_space_mask] = 1
+            combined_mask[0][background_mask]  = 1
+            combined_mask[1][femur_mask]       = 1
+            combined_mask[2][acetabulum_mask]  = 1
+            combined_mask[3][joint_space_mask] = 1
 
-            combined_mask[2][femur_mask]       = 0
-            combined_mask[2][acetabulum_mask]  = 0
+            # Eliminate additional pixels from the joint space mask
+            combined_mask[3][femur_mask]       = 0
+            combined_mask[3][acetabulum_mask]  = 0
 
             # Assign the combined mask to the current side of the body being segmented.
             if hip_side == ct.HipSide.RIGHT:

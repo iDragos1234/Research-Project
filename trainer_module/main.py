@@ -16,18 +16,15 @@ python ./data_loader/main.py \
 ```
 '''
 import argparse
-import torch
-from monai.utils import set_determinism
 
-import data_loader_builder
 import models
 import trainer
 
 
-def main():
+def main() -> None:
     args = get_args()
 
-    train(
+    model_trainer = trainer.TrainerBuilder(
         hdf5_filepath           = args.input_hdf5,
         data_split_csv_filepath = args.input_data_split_csv,
         model_dir_path          = args.output_model_dir,
@@ -44,68 +41,8 @@ def main():
 
         seed                    = args.seed,
         verbose                 = args.verbose,
-    )
-
-
-
-def train(
-    hdf5_filepath: str,
-    data_split_csv_filepath: str,
-    model_dir_path: str,
-    model_id: str,
-
-    device_name: str,
-
-    learning_rate: float,
-    weight_decay: float,
-    max_epochs: int,
-    batch_size: int,
-    num_workers: int,
-    validation_interval: int,
-
-    seed: int,
-    verbose: bool,
-):
-    # Set seed for reproducibility purposes.
-    set_determinism(seed)
-
-
-    # Build datasets (training, validation and testing)
-    # using the split specified in the data split CSV file.
-    (
-        train_data_loader,
-        valid_data_loader,
-        test_data_loader,  # <--- Not used for training
-    ) = data_loader_builder.DataLoaderBuilder(
-        hdf5_filepath,
-        data_split_csv_filepath,
-        batch_size,
-        num_workers,
-        verbose,
     ).build()
 
-    # Get the specified device (`'cpu'` or `'cuda'`).
-    device = torch.device(device_name)
-
-    # Fetch the selected model setting to be trained.
-    model_setting = models.MODELS[model_id](
-        learning_rate,
-        weight_decay,
-    )
-
-    # Initialize model trainer with the selected model setting.
-    model_trainer = trainer.Trainer(
-        model_setting,
-        train_data_loader,
-        valid_data_loader,
-        device,
-        max_epochs,
-        model_dir_path,
-        validation_interval,
-        verbose,
-    )
-
-    # Train the model.
     model_trainer.train()
 
     return

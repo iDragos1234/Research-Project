@@ -12,7 +12,6 @@ from monai.losses import (
 from monai.metrics import (
     Metric,
     DiceMetric,
-    DiceCE,
 )
 from monai.transforms import (
     Transform,
@@ -43,7 +42,7 @@ class UNetModelV1(MyModel):
         self.model = UNet(
             spatial_dims=2,
             in_channels=1,
-            out_channels=3,
+            out_channels=4,
             channels=(16, 32, 64, 128, 256), 
             strides=(2, 2, 2, 2),
             num_res_units=2,
@@ -76,7 +75,7 @@ class UNetModelV2(MyModel):
         self.model = UNet(
             spatial_dims=2,
             in_channels=1,
-            out_channels=3,
+            out_channels=4,
             channels=(16, 32, 64, 128, 256), 
             strides=(2, 2, 2, 2),
             num_res_units=2,
@@ -99,19 +98,19 @@ class UNetModelV2(MyModel):
 
 
 MODELS = {
-    'U-Net, Dice loss, sigmoid activation, Dice metric': UNetModelV1,
+    '1': UNetModelV1,  # U-Net, Dice loss, sigmoid activation, Dice metric
 
-    'U-Net, DiceCE loss, sigmoid activation, Dice metric': None,
+    '2': None,  # U-Net, DiceCE loss, sigmoid activation, Dice metric
 
-    'U-Net, Dice loss, softmax activation, Dice metric': None,
+    '3': UNetModelV1,  # U-Net, Dice loss, softmax activation, Dice metric
 
-    'U-Net, DiceCE loss, softmax activation, Dice metric':  None,
+    '4': None,  # U-Net, DiceCE loss, softmax activation, Dice metric
 
-    'U-Net, Dice loss, sigmoid activation, Hausdorff metric': None,
+    '5': None,  # U-Net, Dice loss, sigmoid activation, Hausdorff metric
 
-    'U-Net, DiceCE loss, sigmoid activation, Hausdorff metric': None,
+    '6': None,  # U-Net, DiceCE loss, sigmoid activation, Hausdorff metric
 
-    'U-Net, Dice loss, softmax activation, Hausdorff metric': None,
+    '7': None,  # U-Net, Dice loss, softmax activation, Hausdorff metric
 
-    'U-Net, DiceCE loss, softmax activation, Hausdorff metric': None,
+    '8': None,  # U-Net, DiceCE loss, softmax activation, Hausdorff metric
 }

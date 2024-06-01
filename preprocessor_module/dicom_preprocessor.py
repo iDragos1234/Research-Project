@@ -82,7 +82,7 @@ class DicomPreprocessor:
             )
         return
 
-    def __call__(self) -> None:
+    def preprocess(self) -> None:
         if self.verbose:
             print('Starting preprocessing...')
 
@@ -121,10 +121,10 @@ class DicomPreprocessor:
                 dt.PercentilesIntensityNormalization(self.percentile_normalization),
                 dt.MinMaxIntensityNormalization(),
 
+                dt.PadSymmetrically(self.target_pixel_array_shape),
+
                 dt.GetBoneFinderPoints(),
                 dt.GetSegmentationMasks(),
-
-                dt.PadSymmetrically(self.target_pixel_array_shape),
             ])
 
             for meta in tqdm.tqdm(dicom_files_metadata):
