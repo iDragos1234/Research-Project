@@ -52,10 +52,12 @@ class DataLoaderBuilder:
         )
         valid_data_loader = DataLoader(
             dataset     = valid_dataset,
+            batch_size  = self.batch_size,
             num_workers = self.num_workers,
         )
         test_data_loader  = DataLoader(
             dataset     = test_dataset,
+            batch_size  = self.batch_size,
             num_workers = self.num_workers,
         )
 

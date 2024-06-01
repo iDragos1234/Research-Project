@@ -20,7 +20,7 @@
     - Tensorboard still does not show what I want;
 
 ## Softmax-based Dice loss U-Net model
-- Implement --//--;
++ Implement --//--;
 
 ## Evaluation loop
 - Improve current evaluation loop;
@@ -75,6 +75,7 @@
 
 * Loss/metric functions: Dice, CE, DiceCE, Hausdorff, IoU, Jaccard, Tversky, ...
 
+---------------------------------------------------------
 
 ## Commands:
 ```
@@ -82,5 +83,5 @@ py ./data_loader/main.py --input-hdf5 output.h5 --input-data-split-csv data_spli
 
 py ./data_splitter_module/main.py --input-hdf5 output.h5 --output-csv data_split.csv --ratios 0.8 0.1 0.1 --seed 42 --verbose
 
-
+py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_split.csv --output-model-dir ./results --model 1 --device cpu --max-epochs 100 --batch-size 2 --seed 42 --verbose
 ```

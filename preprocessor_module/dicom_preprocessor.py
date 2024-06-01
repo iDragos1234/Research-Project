@@ -50,7 +50,8 @@ class DicomPreprocessor:
     target_pixel_spacing: Union[tuple[float, float], None]
     target_pixel_array_shape: Union[tuple[int, int], None]
     percentile_normalization: Union[tuple[float, float], None]
-    samples_limit: float
+    include_background_mask: bool
+    samples_limit: Union[float, None]
     verbose: bool
 
     def __init__(self,
@@ -59,6 +60,7 @@ class DicomPreprocessor:
         target_pixel_spacing: Union[tuple[float, float], None],
         target_pixel_array_shape: Union[tuple[int, int], None],
         percentile_normalization: Union[tuple[float, float], None],
+        include_background_mask: bool,
         samples_limit: Union[float, None],
         verbose: bool,
     ) -> None:
@@ -68,6 +70,7 @@ class DicomPreprocessor:
         self.target_pixel_spacing     = target_pixel_spacing
         self.target_pixel_array_shape = target_pixel_array_shape
         self.percentile_normalization = percentile_normalization
+        self.include_background_mask  = include_background_mask
         self.samples_limit            = samples_limit
         self.verbose                  = verbose
 
@@ -124,7 +127,7 @@ class DicomPreprocessor:
                 dt.PadSymmetrically(self.target_pixel_array_shape),
 
                 dt.GetBoneFinderPoints(),
-                dt.GetSegmentationMasks(),
+                dt.GetSegmentationMasks(self.include_background_mask),
             ])
 
             for meta in tqdm.tqdm(dicom_files_metadata):

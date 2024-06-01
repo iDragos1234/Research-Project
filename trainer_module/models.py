@@ -42,7 +42,7 @@ class UNetModelV1(MyModel):
         self.model = UNet(
             spatial_dims=2,
             in_channels=1,
-            out_channels=4,
+            out_channels=3,
             channels=(16, 32, 64, 128, 256), 
             strides=(2, 2, 2, 2),
             num_res_units=2,
@@ -100,17 +100,5 @@ class UNetModelV2(MyModel):
 MODELS = {
     '1': UNetModelV1,  # U-Net, Dice loss, sigmoid activation, Dice metric
 
-    '2': None,  # U-Net, DiceCE loss, sigmoid activation, Dice metric
-
-    '3': UNetModelV1,  # U-Net, Dice loss, softmax activation, Dice metric
-
-    '4': None,  # U-Net, DiceCE loss, softmax activation, Dice metric
-
-    '5': None,  # U-Net, Dice loss, sigmoid activation, Hausdorff metric
-
-    '6': None,  # U-Net, DiceCE loss, sigmoid activation, Hausdorff metric
-
-    '7': None,  # U-Net, Dice loss, softmax activation, Hausdorff metric
-
-    '8': None,  # U-Net, DiceCE loss, softmax activation, Hausdorff metric
+    '2': UNetModelV2,  # U-Net, Dice loss, softmax activation, Dice metric
 }

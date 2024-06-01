@@ -13,6 +13,7 @@ def main():
         target_pixel_spacing     = tuple(args.target_pixel_spacing)     if args.target_pixel_spacing     is not None else None,
         target_pixel_array_shape = tuple(args.target_pixel_array_shape) if args.target_pixel_array_shape is not None else None,
         percentile_normalization = tuple(args.percentile_normalization) if args.percentile_normalization is not None else None,
+        include_background_mask  = args.include_background_mask,
         samples_limit            = args.limit,
         verbose                  = args.verbose,
     )
@@ -62,6 +63,11 @@ def get_args() -> argparse.Namespace:
         type=int,
         default=None,
         help='resize image pixel array to target shape (#rows x #columns)',
+    )
+    parser.add_argument(
+        '--include-background-mask',
+        action='store_true',
+        help='whether to include the background binary mask in the combined mask',
     )
     parser.add_argument(
         '--limit',

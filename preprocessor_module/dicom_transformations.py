@@ -385,6 +385,12 @@ class GetSegmentationMasks(DicomTransformation):
     highlighting the various components of the hip, 
     for each of the right and left sides of the hip.
     '''
+    include_background_mask: bool
+
+    def __init__(self, include_background_mask: bool) -> None:
+        super().__init__()
+        self.include_background_mask = include_background_mask
+
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
         pixel_array   = dicom.pixel_array
         pixel_spacing = dicom.pixel_spacing
@@ -456,27 +462,44 @@ class GetSegmentationMasks(DicomTransformation):
                 (pad_offset + regions['joint space'] / pixel_spacing)[:, [1, 0]],
             )
             
-            background_mask = ~(femur_mask + acetabulum_mask + joint_space_mask)
-            
             # Create combined mask as an ndarray of masks for each region.
             # Note that the joint space mask is larger than the true area,
             # the pixels overlapping with the other regions are set to 0.
             combined_mask = np.zeros(shape=mask_shape, dtype=np.uint8)
             combined_mask = combined_mask[None]
-            combined_mask = np.repeat(
-                combined_mask,
-                repeats = 1 + len(regions),  # <-- Also account for the background
-                axis = 0,
-            )
 
-            combined_mask[0][background_mask]  = 1
-            combined_mask[1][femur_mask]       = 1
-            combined_mask[2][acetabulum_mask]  = 1
-            combined_mask[3][joint_space_mask] = 1
+            if self.include_background_mask:
+                combined_mask = np.repeat(
+                    combined_mask,
+                    repeats = 1 + len(regions),
+                    axis = 0,
+                )
+                
+                background_mask = ~(femur_mask + acetabulum_mask + joint_space_mask)
 
-            # Eliminate additional pixels from the joint space mask
-            combined_mask[3][femur_mask]       = 0
-            combined_mask[3][acetabulum_mask]  = 0
+                combined_mask[0][background_mask]  = 1
+                combined_mask[1][femur_mask]       = 1
+                combined_mask[2][acetabulum_mask]  = 1
+                combined_mask[3][joint_space_mask] = 1
+
+                # Eliminate additional pixels from the joint space mask
+                combined_mask[3][femur_mask]       = 0
+                combined_mask[3][acetabulum_mask]  = 0
+
+            else:
+                combined_mask = np.repeat(
+                    combined_mask,
+                    repeats = len(regions),
+                    axis = 0,
+                )
+
+                combined_mask[0][femur_mask]       = 1
+                combined_mask[1][acetabulum_mask]  = 1
+                combined_mask[2][joint_space_mask] = 1
+
+                # Eliminate additional pixels from the joint space mask
+                combined_mask[2][femur_mask]       = 0
+                combined_mask[2][acetabulum_mask]  = 0
 
             # Assign the combined mask to the current side of the body being segmented.
             if hip_side == ct.HipSide.RIGHT:

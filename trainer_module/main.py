@@ -17,8 +17,7 @@ python ./data_loader/main.py \
 '''
 import argparse
 
-import models
-import trainer
+import models, trainer
 
 
 def main() -> None:
