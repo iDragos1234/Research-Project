@@ -131,13 +131,14 @@ class GetSourcePixelSpacing(DicomTransformation):
     and set it as a field in the `DicomContainer`.
     '''
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
-        pixel_spacing: tuple[float, float] = tuple(
-            dicom.dicom_file_object.get(ct.DicomAttributes.PIXEL_SPACING) or \
+        pixel_spacing = \
+            dicom.dicom_file_object.get(ct.DicomAttributes.PIXEL_SPACING       ) or \
             dicom.dicom_file_object.get(ct.DicomAttributes.IMAGER_PIXEL_SPACING)
-        )
         
         if pixel_spacing is None:
             raise PreprocessingException('No pixel spacing found.')
+        
+        pixel_spacing: tuple[float, float] = tuple(pixel_spacing)
 
         if pixel_spacing[0] != pixel_spacing[1]:
             raise PreprocessingException(

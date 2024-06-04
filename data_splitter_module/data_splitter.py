@@ -18,7 +18,7 @@ Data splitter module
     ```
 '''
 from typing import Union
-import time, argparse, csv
+import time, csv
 import h5py, hdf5plugin  # <--- DO NOT REMOVE!
 from torch import Generator
 from torch.utils.data import random_split

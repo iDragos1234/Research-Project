@@ -81,7 +81,7 @@ def get_args() -> argparse.Namespace:
     parser.add_argument(
         '--device',
         type=str,
-        choices=['cpu', 'cuda'],
+        # choices=['cpu', 'cuda'],
         default='cpu',
         help='device on which to train the model',
     )

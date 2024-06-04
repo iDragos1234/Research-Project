@@ -27,7 +27,7 @@ transformations = None
 
 
 datasets = DicomDatasetBuilder(
-    './output.h5',
+    './all_no_bg.h5',
     'data_split.csv',
 ).build()
 dataset = datasets[0]
@@ -44,14 +44,14 @@ if True:
         print('Shapes:', image.shape, mask.shape)
 
         plt.subplot(1, 2, 1)
-        plt.title(f'Plot #{idx + 1} - sample {sample_id}')
-        plt.imshow(image[0])
-        plt.colorbar()
+        # plt.title(f'Plot #{idx + 1} - sample {sample_id}')
+        plt.imshow(image[0], 'grey')
+        # plt.colorbar()
 
         plt.subplot(1, 2, 2)
-        plt.title(f'Plot #{idx + 1} - sample {sample_id}')
-        plt.imshow(sum((idx + 1) * submask for idx, submask in enumerate(mask)))
-        plt.colorbar()
+        # plt.title(f'Plot #{idx + 1} - sample {sample_id}')
+        plt.imshow(sum((idx + 1) * submask for idx, submask in enumerate(mask)), 'grey')
+        # plt.colorbar()
         plt.show()
 
 

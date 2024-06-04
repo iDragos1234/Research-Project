@@ -1,5 +1,4 @@
 import re
-from typing import override
 
 
 N_BONEFINDER_POINTS = 160
@@ -14,7 +13,6 @@ class HipSide(MyEnum):
     RIGHT = 'right'
     LEFT  = 'left'
 
-    @override
     def items():
         return [HipSide.RIGHT, HipSide.LEFT]
 
@@ -23,7 +21,6 @@ class Dataset(MyEnum):
     CHECK = 'CHECK'
     OAI   = 'OAI'
 
-    @override
     def items():
         return [Dataset.CHECK, Dataset.OAI]
 
@@ -37,7 +34,6 @@ class HipSideOffset(MyEnum):
     RIGHT = (HipSide.RIGHT, 0)
     LEFT  = (HipSide.LEFT, 80)
 
-    @override
     def items():
         return [HipSideOffset.RIGHT, HipSideOffset.LEFT]
 
@@ -51,7 +47,6 @@ class HipBoneCurve(MyEnum):
     ACETABULAR_ROOF    = ('acetabular roof',    list(range(67, 75)))
     TEARDROP           = ('teardrop',           list(range(75, 80)))
 
-    @override
     def items():
         return [
             HipBoneCurve.PROXIMAL_FEMUR,
@@ -68,7 +63,6 @@ class HipBoneSubCurve(MyEnum):
     FEMORAL_HEAD = ('femoral head', list(range(18, 28)))
     SOURCIL      = ('sourcil',      list(range(70, 75)))
 
-    @override
     def items():
         return [
             HipBoneSubCurve.FEMORAL_HEAD,

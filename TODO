@@ -79,8 +79,6 @@
 
 ## Commands:
 ```
-py ./data_loader/main.py --input-hdf5 output.h5 --input-data-split-csv data_split.csv --output-model-dir ./results --device cpu --learning-rate 1e-3 --weight-decay 1e-5 --max-epochs 100 --batch-size 2 --num-workers 0 --validation-interval 1 --seed 42
-
 py ./data_splitter_module/main.py --input-hdf5 output.h5 --output-csv data_split.csv --ratios 0.8 0.1 0.1 --seed 42 --verbose
 
 py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_split.csv --output-model-dir ./results --model 1 --device cpu --max-epochs 100 --batch-size 2 --seed 42 --verbose

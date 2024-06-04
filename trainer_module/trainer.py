@@ -96,6 +96,9 @@ class Trainer:
         if not verbose:
             loading_bar = tqdm.tqdm(loading_bar)
 
+        # Load model to device
+        model = model.to(device) 
+
         # Training loop
         for epoch in loading_bar:
             if verbose:
@@ -285,7 +288,7 @@ class Trainer:
                 f'Train completed:\n'
                 f'  - best_metric: {best_valid_metric:.4f} '
                 f'at epoch: {best_valid_metric_epoch};\n'
-                f'  - ellapsed time: {stats['ellapsed time']:.4f}s.'
+                f'  - ellapsed time: {stats["ellapsed time"]:.4f}s.'
             )
 
         return

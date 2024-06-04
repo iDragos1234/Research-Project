@@ -173,9 +173,9 @@ class DicomPreprocessor:
             print(
                 f'Finished preprocessing.\n'
                 f'Stats:\n'
-                f'  - Ellapsed time:                {stats['ellapsed time']:.4f}s;\n'
-                f'  - Total number of files:        {stats['total num files']};\n'
-                f'  - Number of preprocessed files: {stats['num preprocessed files']};\n'
-                f'  - Number of erronous files:     {stats['num erronous files']};'
+                f'  - Ellapsed time:                {stats["ellapsed time"]:.4f}s;\n'
+                f'  - Total number of files:        {stats["total num files"]};\n'
+                f'  - Number of preprocessed files: {stats["num preprocessed files"]};\n'
+                f'  - Number of erronous files:     {stats["num erronous files"]};'
             )
         return
