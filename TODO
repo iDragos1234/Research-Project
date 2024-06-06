@@ -77,9 +77,25 @@
 
 ---------------------------------------------------------
 
-## Commands:
+# Commands:
 ```
 py ./data_splitter_module/main.py --input-hdf5 output.h5 --output-csv data_split.csv --ratios 0.8 0.1 0.1 --seed 42 --verbose
 
 py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_split.csv --output-model-dir ./results --model 1 --device cpu --max-epochs 100 --batch-size 2 --seed 42 --verbose
 ```
+
+---------------------------------------------------------
+
+# Q&A meeting notes - 4th of June 2024
+
+* Ideally, they want a model trained on all data;
+* Can also do smaller datasets and argue for how much data we need;
+
+---------------------------------------------------------
+
+# Group meeting notes - 6th of June 2024
+
+* Explain what's and why's about the U-Net in the Methodology section;
+* 
+
+---------------------------------------------------------

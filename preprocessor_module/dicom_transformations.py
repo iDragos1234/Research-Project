@@ -18,8 +18,8 @@ DicomFileObject = Union[FileDataset, DicomDir]
 
 class DicomContainer:
 
-    dicom_file_path: str
-    points_file_path: str
+    dicom_filepath: str
+    points_filepath: str
     hdf5_file_object: h5py.File
 
     dataset: Literal['CHECK', 'OAI']
@@ -44,15 +44,15 @@ class DicomContainer:
     right_pad: int
 
     def __init__(self,
-        dicom_file_path: str,
-        points_file_path: str,
-        hdf5_file_object: h5py.File,
+        dicom_filepath: str,
+        points_filepath: str,
         dataset: Literal['CHECK', 'OAI'],
         subject_id: str,
         subject_visit: str,
+        hdf5_file_object: h5py.File,
     ) -> None:
-        self.dicom_file_path  = dicom_file_path
-        self.points_file_path = points_file_path
+        self.dicom_filepath  = dicom_filepath
+        self.points_filepath = points_filepath
         self.hdf5_file_object = hdf5_file_object
         self.dataset          = dataset
         self.subject_id       = subject_id
@@ -94,7 +94,7 @@ class LoadDicomObject(DicomTransformation):
     The DICOM filepath is specified as an attribute in the `DicomContainer`.
     '''
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
-        dicom.dicom_file_object = dcmread(dicom.dicom_file_path)
+        dicom.dicom_file_object = dcmread(dicom.dicom_filepath)
         return dicom
     
 
@@ -353,7 +353,7 @@ class PadSymmetrically(DicomTransformation):
 class GetBoneFinderPoints(DicomTransformation):
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
-        with open(dicom.points_file_path, 'r') as points_file_object:
+        with open(dicom.points_filepath, 'r') as points_file_object:
             lines = points_file_object.readlines()
             lines = [line.strip() for line in lines]
 
@@ -572,28 +572,12 @@ class AppendDicomToHDF5(DicomTransformation):
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
 
-        dicom_file_path          = dicom.dicom_file_path
-        points_file_path         = dicom.points_file_path
-        hdf5_file_object         = dicom.hdf5_file_object
-
-        dataset                  = dicom.dataset
-        subject_id               = dicom.subject_id
-        subject_visit            = dicom.subject_visit
-
-        pixel_array              = dicom.pixel_array
-        right_segmentation_mask  = dicom.right_segmentation_mask
-        left_segmentation_mask   = dicom.left_segmentation_mask
-
-        source_pixel_spacing     = dicom.source_pixel_spacing
-        pixel_spacing            = dicom.pixel_spacing
-        source_pixel_array_shape = dicom.source_pixel_array_shape
-
         # Infer which hip side is to be segmented
         segmentation_mask: np.ndarray
         if self.hip_side == ct.HipSide.RIGHT:
-            segmentation_mask = right_segmentation_mask
+            segmentation_mask = dicom.right_segmentation_mask
         elif self.hip_side == ct.HipSide.LEFT:
-            segmentation_mask = left_segmentation_mask
+            segmentation_mask = dicom.left_segmentation_mask
         else:
             raise PreprocessingException(
                 f'Hip side can be either `\'{ct.HipSide.RIGHT}\'` or `\'{ct.HipSide.LEFT}\'`.'
@@ -601,23 +585,29 @@ class AppendDicomToHDF5(DicomTransformation):
             )
 
         # Write to hdf5:
-        group_id = f'/scans/{dataset}/{subject_id}/{subject_visit}/{self.hip_side}'
-        group    = hdf5_file_object.require_group(group_id)
+        group_id = f'/scans/{dicom.dataset}/{dicom.subject_id}/{dicom.subject_visit}/{self.hip_side}'
+        group    = dicom.hdf5_file_object.require_group(group_id)
 
         # Write meta info
-        group.attrs['dicom_file_path']          = dicom_file_path
-        group.attrs['points_file_path']         = points_file_path
-        group.attrs['dataset']                  = dataset
-        group.attrs['subject_id']               = subject_id
-        group.attrs['subject_visit']            = subject_visit
-        group.attrs['source_pixel_spacing']     = source_pixel_spacing
-        group.attrs['pixel_spacing']            = pixel_spacing
-        group.attrs['source_pixel_array_shape'] = source_pixel_array_shape
+        group.attrs['dicom_filepath']           = dicom.dicom_filepath
+        group.attrs['points_filepath']          = dicom.points_filepath
+        group.attrs['dataset']                  = dicom.dataset
+        group.attrs['subject_id']               = dicom.subject_id
+        group.attrs['subject_visit']            = dicom.subject_visit
         group.attrs['hip_side']                 = self.hip_side
+
+        group.attrs['source_pixel_spacing']     = dicom.source_pixel_spacing
+        group.attrs['pixel_spacing']            = dicom.pixel_spacing
+        group.attrs['source_pixel_array_shape'] = dicom.source_pixel_array_shape
+
+        group.attrs['top_pad']                  = dicom.top_pad
+        group.attrs['bottom_pad']               = dicom.bottom_pad
+        group.attrs['left_pad']                 = dicom.left_pad
+        group.attrs['right_pad']                = dicom.right_pad
 
         # Write image
         img_ds = group.create_dataset(
-            'image', data=pixel_array,
+            'image', data=dicom.pixel_array,
             **hdf5plugin.Blosc2(cname='blosclz', clevel=9, filters=hdf5plugin.Blosc2.SHUFFLE)
         )
 

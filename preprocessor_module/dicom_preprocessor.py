@@ -1,20 +1,5 @@
-'''
-Preprocessor gateway.
-How to run:
-* open a bash terminal;
-* execute the following command in the terminal:
-```
-python ./dicom_preprocessor/dicom_preprocessor.py \
-    --input "./data" \
-    --output "./output.h5" \
-    --percentile-normalization 5 95 \
-    --target-pixel-spacing 0.9 0.9 \
-    --target-pixel-array-shape 512 512 \
-    --verbose
-```
-'''
 from typing import Union
-import h5py, argparse, tqdm, time
+import h5py, tqdm, time
 
 import list_dicom_files
 import dicom_transformations as dt
@@ -121,6 +106,7 @@ class DicomPreprocessor:
                 dt.CheckVoilutFunction(),
 
                 dt.RescaleToTargetPixelSpacing(self.target_pixel_spacing),
+
                 dt.PercentilesIntensityNormalization(self.percentile_normalization),
                 dt.MinMaxIntensityNormalization(),
 
@@ -136,12 +122,12 @@ class DicomPreprocessor:
 
                 # Create container of DICOM file data on which to apply the transforms
                 dicom_container = dt.DicomContainer(
-                    dicom_file_path          = dicom_file_path,
-                    points_file_path         = points_file_path,
-                    hdf5_file_object         = hdf5_file_object,
-                    dataset                  = dataset,
-                    subject_id               = subject_id,
-                    subject_visit            = subject_visit,
+                    dicom_filepath   = dicom_file_path,
+                    points_filepath  = points_file_path,
+                    hdf5_file_object = hdf5_file_object,
+                    dataset          = dataset,
+                    subject_id       = subject_id,
+                    subject_visit    = subject_visit,
                 )
 
                 try:

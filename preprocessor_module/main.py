@@ -1,3 +1,17 @@
+'''
+How to run:
+* open a bash terminal;
+* execute the following command in the terminal:
+```
+python ./dicom_preprocessor/dicom_preprocessor.py \
+    --input "./data" \
+    --output "./output.h5" \
+    --percentile-normalization 5 95 \
+    --target-pixel-spacing 0.9 0.9 \
+    --target-pixel-array-shape 512 512 \
+    --verbose
+```
+'''
 import argparse
 
 import dicom_preprocessor as dp

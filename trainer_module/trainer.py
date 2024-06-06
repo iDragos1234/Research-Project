@@ -1,5 +1,4 @@
 import os, time, tqdm
-from matplotlib import pyplot as plt
 import numpy as np
 
 
@@ -257,25 +256,25 @@ class Trainer:
                     plot_2d_or_3d_image(valid_labels,  epoch + 1,  writer, tag = 'label',  max_channels = 3)
                     plot_2d_or_3d_image(valid_outputs, epoch + 1,  writer, tag = 'output', max_channels = 3)
 
-        # Save the last epoch model state
-        torch.save(
-            model.state_dict(),
-            os.path.join(model_dir_path, 'last_epoch_model.pth'),
-        )
-        
-        # Save stats:
-        np.save(
-            os.path.join(model_dir_path, 'train_loss_per_epoch.npy'),
-            stats['train loss values per epoch'],
-        )
-        np.save(
-            os.path.join(model_dir_path, 'train_metric_per_epoch.npy'),
-            stats['train metric values per epoch'],
-        )
-        np.save(
-            os.path.join(model_dir_path, 'validation_metric_per_epoch.npy'),
-            stats['validation metric values per epoch'],
-        )
+            # Save the last epoch model state
+            torch.save(
+                model.state_dict(),
+                os.path.join(model_dir_path, 'last_epoch_model.pth'),
+            )
+            
+            # Save stats:
+            np.save(
+                os.path.join(model_dir_path, 'train_loss_per_epoch.npy'),
+                stats['train loss values per epoch'],
+            )
+            np.save(
+                os.path.join(model_dir_path, 'train_metric_per_epoch.npy'),
+                stats['train metric values per epoch'],
+            )
+            np.save(
+                os.path.join(model_dir_path, 'validation_metric_per_epoch.npy'),
+                stats['validation metric values per epoch'],
+            )
         
         # Close tensorboard writer
         writer.close()
