@@ -476,6 +476,9 @@ class GetSegmentationMasks(DicomTransform):
                 
                 background_mask = ~(femur_mask + acetabulum_mask + joint_space_mask)
 
+                # NOTE: background must be channel 0, 
+                # since it is not included in the loss 
+                # calculation during training
                 combined_mask[0][background_mask]  = 1
                 combined_mask[1][femur_mask]       = 1
                 combined_mask[2][acetabulum_mask]  = 1

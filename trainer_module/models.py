@@ -73,17 +73,23 @@ class UNetModelV2(MyModel):
         super().__init__()
 
         self.model = UNet(
-            spatial_dims=2,
-            in_channels=1,
-            out_channels=4,
-            channels=(16, 32, 64, 128, 256),
-            strides=(2, 2, 2, 2),
-            num_res_units=2,
+            spatial_dims = 2,
+            in_channels = 1,
+            out_channels = 4,
+            channels = (16, 32, 64, 128, 256),
+            strides = (2, 2, 2, 2),
+            num_res_units = 2,
         )
 
-        self.loss_func = DiceLoss(softmax=True)
+        self.loss_func = DiceLoss(
+            include_background=False,
+            softmax = True,
+        )
 
-        self.metric_func = DiceMetric()
+        self.metric_func = DiceMetric(
+            include_background = False,
+        )
+
         self.optimizer = Adam(
             params=self.model.parameters(),
             lr=learning_rate,
@@ -94,7 +100,7 @@ class UNetModelV2(MyModel):
         self.post_transf = Compose([
             Activations(softmax = True),
             AsDiscrete (
-                argmax    = True,
+                argmax = True,
                 to_onehot = 4,
             ),
         ])
@@ -102,6 +108,5 @@ class UNetModelV2(MyModel):
 
 MODELS = {
     '1': UNetModelV1,  # U-Net, Dice loss, sigmoid activation, Dice metric
-
     '2': UNetModelV2,  # U-Net, Dice loss, softmax activation, Dice metric
 }
