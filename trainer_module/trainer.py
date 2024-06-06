@@ -134,7 +134,7 @@ class Trainer:
                 train_labels  = decollate_batch(train_labels )
                 train_outputs = decollate_batch(train_outputs)
 
-                # Apply the post-prediction transformation, if any
+                # Apply the post-prediction transform, if any
                 if post_transf is not None:
                     train_outputs = [post_transf(item) for item in train_outputs]
 
@@ -207,8 +207,8 @@ class Trainer:
                         valid_inputs  = decollate_batch(valid_inputs )
                         valid_labels  = decollate_batch(valid_labels )
                         valid_outputs = decollate_batch(valid_outputs)
-                        
-                        # Apply the post-prediction transformation, if any
+
+                        # Apply the post-prediction transform, if any
                         if post_transf is not None:
                             valid_outputs = [post_transf(item) for item in valid_outputs]
 

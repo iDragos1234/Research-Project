@@ -10,7 +10,7 @@ Metadata consists of:
 import os, glob, re
 
 import constants as ct
-import dicom_transformations as dt
+import dicom_transforms as dt
 
 
 DicomFilepath = str
@@ -44,18 +44,18 @@ class ListDicomFiles:
     Each DICOM file is expected to have a 
     corresponding BoneFinder points file.
     '''
-    data_folder_path: str
+    data_dir_path: str
 
-    def __init__(self, data_folder_path: str) -> None:
-        self.data_folder_path = data_folder_path
+    def __init__(self, data_dir_path: str) -> None:
+        self.data_dir_path = data_dir_path
 
     def __call__(self) -> list[DicomMetadata]:
-        return ListDicomFiles._get_dicom_files_metadata(self.data_folder_path)
+        return ListDicomFiles._get_dicom_files_metadata(self.data_dir_path)
 
     @staticmethod
     def _get_dicom_file_metadata(
         dataset_name: str, 
-        folder_subject_visit: str, 
+        data_dir_subject_visit: str, 
         dicom_file_path: str
     ) -> DicomMetadata:
         '''
@@ -90,44 +90,44 @@ class ListDicomFiles:
             filename_regex = ct.FilenameRegex.OAI
         else:
             raise dt.PreprocessingException(f'Unknown dataset name. Was: {dataset_name}.')
-        
+
         # Extract DICOM filename from the filepath.
         dicom_file_name = os.path.basename(dicom_file_path)
-        
+
         # Extract subject id and visit using the filename regex.
         match = filename_regex.match(dicom_file_name)
         if match:
             subject_id, subject_visit = match.group('subject_id', 'subject_visit')
-            if folder_subject_visit != subject_visit:
+            if data_dir_subject_visit != subject_visit:
                 raise dt.PreprocessingException(
-                    f'Visit specified in directory name is different from visit specified in file name: {folder_subject_visit} =/= {subject_visit}.'
+                    f'Visit specified in directory name is different from visit specified in file name: {data_dir_subject_visit} =/= {subject_visit}.'
                 )
             return dicom_file_path, points_file_path, dataset_name, subject_id, subject_visit
         raise dt.PreprocessingException('Filename pattern not recognized.')
 
     @staticmethod
-    def _get_dicom_files_metadata(data_folder_path: str) -> list[DicomMetadata]:
+    def _get_dicom_files_metadata(data_dir_path: str) -> list[DicomMetadata]:
         '''
-        Get the DICOM file metadata for all files located in the specified folder.
+        Get the DICOM file metadata for all files located in the specified directory.
 
         Parameters
         ----------
-        data_folder_path (str): The folder path where to look for DICOM files.
+        data_dir_path (str): The directory path where to look for DICOM files.
 
         Returns
         -------
-        list[DicomMetadata]: A list of `DicomMetadata` for each DICOM file in the data folder.
+        list[DicomMetadata]: A list of `DicomMetadata` for each DICOM file in the data directory.
         '''
-        # Verify that the specified folder path is pointing to an existing folder.
-        if not os.path.isdir(data_folder_path):
+        # Verify that the specified directory path is pointing to an existing directory.
+        if not os.path.isdir(data_dir_path):
             raise dt.PreprocessingException(
-                f'The path {data_folder_path} does not point to a directory.'
+                f'The path {data_dir_path} does not point to a directory.'
             )
         
         dicom_files_metadata: list[DicomMetadata] = []
         for dataset_name in ct.Dataset.items():
-            for patient_visit in os.listdir(f'{data_folder_path}/{dataset_name}'):
-                for dicom_file_path in glob.glob(f'{data_folder_path}/{dataset_name}/{patient_visit}/*.dcm'):
+            for patient_visit in os.listdir(f'{data_dir_path}/{dataset_name}'):
+                for dicom_file_path in glob.glob(f'{data_dir_path}/{dataset_name}/{patient_visit}/*.dcm'):
                     try:
                         dicom_files_metadata.append(
                             ListDicomFiles._get_dicom_file_metadata(

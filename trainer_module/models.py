@@ -32,7 +32,7 @@ class MyModel:
 
 
 class UNetModelV1(MyModel):
-    
+
     def __init__(self,
         learning_rate: float,
         weight_decay: float,
@@ -43,7 +43,7 @@ class UNetModelV1(MyModel):
             spatial_dims=2,
             in_channels=1,
             out_channels=3,
-            channels=(16, 32, 64, 128, 256), 
+            channels=(16, 32, 64, 128, 256),
             strides=(2, 2, 2, 2),
             num_res_units=2,
         )
@@ -65,7 +65,7 @@ class UNetModelV1(MyModel):
 
 
 class UNetModelV2(MyModel):
-    
+
     def __init__(self,
         learning_rate: float,
         weight_decay: float,
@@ -76,7 +76,7 @@ class UNetModelV2(MyModel):
             spatial_dims=2,
             in_channels=1,
             out_channels=4,
-            channels=(16, 32, 64, 128, 256), 
+            channels=(16, 32, 64, 128, 256),
             strides=(2, 2, 2, 2),
             num_res_units=2,
         )
@@ -93,7 +93,10 @@ class UNetModelV2(MyModel):
         self.pre_transf = None
         self.post_transf = Compose([
             Activations(softmax = True),
-            AsDiscrete (argmax  = True),
+            AsDiscrete (
+                argmax    = True,
+                to_onehot = 4,
+            ),
         ])
 
 

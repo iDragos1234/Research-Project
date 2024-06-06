@@ -20,13 +20,22 @@ import dicom_preprocessor as dp
 def main():
     args = get_args()
 
+    if args.target_pixel_spacing is not None:
+        args.target_pixel_spacing = tuple(args.target_pixel_spacing)
+
+    if args.target_pixel_array_shape is not None:
+        args.target_pixel_array_shape = tuple(args.target_pixel_array_shape)
+
+    if args.percentile_normalization is not None:
+        args.percentile_normalization = tuple(args.percentile_normalization)
+
     # Set preprocessor parameters
     preprocessor = dp.DicomPreprocessor(
-        data_folder_path         = args.input_dir,
-        hdf5_file_path           = args.output_hdf5,
-        target_pixel_spacing     = tuple(args.target_pixel_spacing)     if args.target_pixel_spacing     is not None else None,
-        target_pixel_array_shape = tuple(args.target_pixel_array_shape) if args.target_pixel_array_shape is not None else None,
-        percentile_normalization = tuple(args.percentile_normalization) if args.percentile_normalization is not None else None,
+        data_dir_path            = args.input_dir,
+        hdf5_filepath            = args.output_hdf5,
+        target_pixel_spacing     = args.target_pixel_spacing,
+        target_pixel_array_shape = args.target_pixel_array_shape,
+        percentile_normalization = args.percentile_normalization,
         include_background_mask  = args.include_background_mask,
         samples_limit            = args.limit,
         verbose                  = args.verbose,

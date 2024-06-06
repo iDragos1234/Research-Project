@@ -1,5 +1,5 @@
 '''
-Transformations for the DICOM files and BoneFinder generated points files.
+Transforms for the DICOM files and BoneFinder generated points files.
 '''
 from typing import Literal, Union
 import numpy as np
@@ -64,7 +64,7 @@ class DicomContainer:
         self.right_pad  = 0
 
 
-class DicomTransformation:
+class DicomTransform:
 
     def __init__(self) -> None:
         pass
@@ -73,22 +73,22 @@ class DicomTransformation:
         pass
 
 
-class CombineTransformations(DicomTransformation):
+class CombineTransforms(DicomTransform):
     '''
-    Chain a sequence of `DicomTransformation`s that are applied to a `DicomContainer`.
+    Chain a sequence of `DicomTransform`s that are applied to a `DicomContainer`.
     '''
-    transformations: list[DicomTransformation]
+    transforms: list[DicomTransform]
     
-    def __init__(self, transformations: list[DicomTransformation]) -> None:
-        self.transformations = transformations
+    def __init__(self, transforms: list[DicomTransform]) -> None:
+        self.transforms = transforms
 
-    def __call__(self, container: DicomContainer) -> DicomTransformation:
-        for t in self.transformations:
+    def __call__(self, container: DicomContainer) -> DicomTransform:
+        for t in self.transforms:
             container = t(container)
         return container
 
 
-class LoadDicomObject(DicomTransformation):
+class LoadDicomObject(DicomTransform):
     '''
     Loads the image from the DICOM file into a `DicomContainer`.
     The DICOM filepath is specified as an attribute in the `DicomContainer`.
@@ -98,10 +98,10 @@ class LoadDicomObject(DicomTransformation):
         return dicom
     
 
-class GetPixelArray(DicomTransformation):
+class GetPixelArray(DicomTransform):
     '''
     Get the pixel array from the `DicomObject` and set it as a field in the `DicomContainer`.
-    This transformation ensures that the inital 2D image is wrapped into a 3D array,
+    This transforms ensures that the inital 2D image is wrapped into a 3D array,
     to match the dimensionlity of the combined segmentation mask.
     '''
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
@@ -125,7 +125,7 @@ class GetPixelArray(DicomTransformation):
         return dicom
     
 
-class GetSourcePixelSpacing(DicomTransformation):
+class GetSourcePixelSpacing(DicomTransform):
     '''
     Get the source pixel spacing as specified in the DICOM file object
     and set it as a field in the `DicomContainer`.
@@ -152,7 +152,7 @@ class GetSourcePixelSpacing(DicomTransformation):
         return dicom
         
 
-class CheckPhotometricInterpretation(DicomTransformation):
+class CheckPhotometricInterpretation(DicomTransform):
     '''
     Check if pixel intensities are stored as `MONOCHROME2` (white = max, black = min).
     `Photometric Interpretation` of DICOM images must be either `MONOCHROME1` or `MONOCHROME2`.
@@ -173,7 +173,7 @@ class CheckPhotometricInterpretation(DicomTransformation):
         return dicom
     
 
-class CheckVoilutFunction(DicomTransformation):
+class CheckVoilutFunction(DicomTransform):
     '''
     The `VOILUTFunction` attribute of the DICOM file object must be `LINEAR`.
     '''
@@ -190,7 +190,7 @@ class CheckVoilutFunction(DicomTransformation):
         return dicom
     
 
-class PercentilesIntensityNormalization(DicomTransformation):
+class PercentilesIntensityNormalization(DicomTransform):
     '''
     Normalize image pixel intensities using percentile normalization.
 
@@ -240,7 +240,7 @@ class PercentilesIntensityNormalization(DicomTransformation):
         return dicom
     
 
-class MinMaxIntensityNormalization(DicomTransformation):
+class MinMaxIntensityNormalization(DicomTransform):
     '''
     Normalize image pixel intensities using MinMax normalization
     (i.e., pixels values will be in the interval `[0.0, 1.0]`).
@@ -252,7 +252,7 @@ class MinMaxIntensityNormalization(DicomTransformation):
         return dicom
     
 
-class RescaleToTargetPixelSpacing(DicomTransformation):
+class RescaleToTargetPixelSpacing(DicomTransform):
     '''
     Rescale image to the target resolution.
 
@@ -281,21 +281,19 @@ class RescaleToTargetPixelSpacing(DicomTransformation):
         self.target_pixel_spacing = target_pixel_spacing
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
-        source_pixel_spacing = dicom.source_pixel_spacing
-        target_pixel_spacing = self.target_pixel_spacing
 
-        if target_pixel_spacing is None:
+        if self.target_pixel_spacing is None:
             return dicom
 
         # Rescale image pixel array to match the target resolution.
-        scale_factor        = source_pixel_spacing[0] / target_pixel_spacing[0]
+        scale_factor        = dicom.pixel_spacing[0] / self.target_pixel_spacing[0]
         dicom.pixel_array   = rescale(dicom.pixel_array, scale_factor)
-        dicom.pixel_spacing = target_pixel_spacing
+        dicom.pixel_spacing = self.target_pixel_spacing
 
         return dicom
 
 
-class PadSymmetrically(DicomTransformation):
+class PadSymmetrically(DicomTransform):
     '''
     Pad image and segmentation masks symmetrically 
     along each of the vertical and horizontal axes.
@@ -350,7 +348,7 @@ class PadSymmetrically(DicomTransformation):
         return dicom
 
 
-class GetBoneFinderPoints(DicomTransformation):
+class GetBoneFinderPoints(DicomTransform):
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
         with open(dicom.points_filepath, 'r') as points_file_object:
@@ -380,7 +378,7 @@ class GetBoneFinderPoints(DicomTransformation):
         return dicom
 
 
-class GetSegmentationMasks(DicomTransformation):
+class GetSegmentationMasks(DicomTransform):
     '''
     Compute the RGB pixel array of the segmentation mask,
     highlighting the various components of the hip, 
@@ -515,7 +513,7 @@ class GetSegmentationMasks(DicomTransformation):
         return dicom
 
 
-class Flip(DicomTransformation):
+class Flip(DicomTransform):
     '''
     Flip the pixel array and the segmentation masks for both sides.
 
@@ -560,7 +558,7 @@ class Flip(DicomTransformation):
         return dicom
 
 
-class AppendDicomToHDF5(DicomTransformation):
+class AppendDicomToHDF5(DicomTransform):
     '''
     Write the information contained within the given `DicomContainer`
     to the HDF5 file indicated by the same `DicomContainer`.

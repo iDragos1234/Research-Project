@@ -23,7 +23,7 @@ from dicom_dataset import DicomDatasetBuilder
 #     # ScaleIntensityd(keys),
 #     # ResizeWithPadOrCropd(keys, spatial_size=512),
 # ])
-transformations = None
+transforms = None
 
 
 datasets = DicomDatasetBuilder(
