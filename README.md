@@ -18,5 +18,5 @@ To run the preprocessing step on the DelftBlue supercomputer, run the following 
 sbatch run.sh
 ```
 
-The preprocessing step will perform specific transformations on all data from the input folder and write it to an HDF5 file as output.
+The preprocessing step will perform specific transforms on all data from the input folder and write it to an HDF5 file as output.
 

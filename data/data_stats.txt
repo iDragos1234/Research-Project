@@ -7,9 +7,9 @@
     |     total | 11291 |                total | 11290 |
     +-----------+-------+----------------------+-------+
     | CHECK/T00 |   436 | CHECK-pointfiles/T00 |   435 |
-    | CHECK/T02 |   717 | CHECK-pointfiles/T02 |   692 |
-    | CHECK/T05 |   882 | CHECK-pointfiles/T05 |   826 |
+    | CHECK/T02 |   717 | CHECK-pointfiles/T02 |   692 | 25
+    | CHECK/T05 |   882 | CHECK-pointfiles/T05 |   826 | 56
     | CHECK/T08 |   835 | CHECK-pointfiles/T08 |   835 |
-    | CHECK/T10 |   833 | CHECK-pointfiles/T10 |   781 |
+    | CHECK/T10 |   833 | CHECK-pointfiles/T10 |   781 | 52
     |     total |  3703 |                total |  3569 |
     +-----------+-------+----------------------+-------+

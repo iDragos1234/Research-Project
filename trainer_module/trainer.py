@@ -252,9 +252,9 @@ class Trainer:
                         )
 
                     # Save the last validation inputs, labels and outputs to tensorboard
-                    plot_2d_or_3d_image(valid_inputs,  epoch + 1,  writer, tag = 'image',  max_channels = 3)
-                    plot_2d_or_3d_image(valid_labels,  epoch + 1,  writer, tag = 'label',  max_channels = 3)
-                    plot_2d_or_3d_image(valid_outputs, epoch + 1,  writer, tag = 'output', max_channels = 3)
+                    plot_2d_or_3d_image(valid_inputs,  epoch + 1,  writer, tag = 'image',  max_channels = 4)
+                    plot_2d_or_3d_image(valid_labels,  epoch + 1,  writer, tag = 'label',  max_channels = 4)
+                    plot_2d_or_3d_image(valid_outputs, epoch + 1,  writer, tag = 'output', max_channels = 4)
 
             # Save the last epoch model state
             torch.save(
@@ -284,10 +284,9 @@ class Trainer:
 
         if verbose:
             print(
-                f'Train completed:\n'
-                f'  - best_metric: {best_valid_metric:.4f} '
-                f'at epoch: {best_valid_metric_epoch};\n'
-                f'  - ellapsed time: {stats["ellapsed time"]:.4f}s.'
+                f'Training completed:\n'
+                f'  - best_metric: {best_valid_metric:.4f} at epoch: {best_valid_metric_epoch};\n'
+                f'  - ellapsed time: {stats["ellapsed time"]:.4f}s.\n'
             )
 
         return
@@ -341,11 +340,11 @@ class TrainerBuilder:
             valid_data_loader,
             test_data_loader,  # <--- Not used for training
         ) = data_loader_builder.DataLoaderBuilder(
-            self.hdf5_filepath,
-            self.data_split_csv_filepath,
-            self.batch_size,
-            self.num_workers,
-            self.verbose,
+            hdf5_filepath           = self.hdf5_filepath,
+            data_split_csv_filepath = self.data_split_csv_filepath,
+            batch_size              = self.batch_size,
+            num_workers             = self.num_workers,
+            verbose                 = self.verbose,
         ).build()
 
         # Get the specified device (`'cpu'` or `'cuda'`).
@@ -353,18 +352,18 @@ class TrainerBuilder:
 
         # Fetch the selected model setting to be trained.
         model_setting = models.MODELS[self.model_id](
-            self.learning_rate,
-            self.weight_decay,
+            learning_rate = self.learning_rate,
+            weight_decay  = self.weight_decay,
         )
 
         # Initialize model trainer with the selected model setting.
         return Trainer(
-            model_setting,
-            train_data_loader,
-            valid_data_loader,
-            device,
-            self.max_epochs,
-            self.model_dir_path,
-            self.validation_interval,
-            self.verbose,
+            model_setting     = model_setting,
+            train_data_loader = train_data_loader,
+            valid_data_loader = valid_data_loader,
+            device            = device,
+            max_epochs        = self.max_epochs,
+            model_dir_path    = self.model_dir_path,
+            valid_interval    = self.validation_interval,
+            verbose           = self.verbose,
         )

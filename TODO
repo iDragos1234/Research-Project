@@ -1,10 +1,10 @@
 # Coding TODOs
 
 ## Dicom Preprocessor
-+ Migrate `CropOrPad` transformation from `model.py` to `dicom_transformations.py`;
++ Migrate `CropOrPad` transform from `model.py` to `dicom_transform.py`;
     + Add new command-line args for setting the desired image size after applying `CropOrPad`;
     * Note: I only implemented `Pad` since `Crop` likely to give unwanted results;
-+ Improve transformations;
++ Improve transforms;
 
 ## Data splitter
 + Train/valid/test data splitter;
@@ -16,8 +16,8 @@
 
 ## Training loop
 + Improve current training loop;
-- Save metrics, losses, images and masks;
-    - Tensorboard still does not show what I want;
++ Save metrics, losses, images and masks;
+    + Tensorboard still does not show what I want;
 
 ## Softmax-based Dice loss U-Net model
 + Implement --//--;
@@ -34,18 +34,17 @@
 
 ---------------------------------------------------------
 
-# Paper and Poster TODOs
-- Add ***Methodology section***;
-- Submit ACS assignment 4 (overdue!);
-- ACS poster session;
-    * Scheduled: Wednesday, 29th of May 2024;
-- Submit ***Poster/Paper Draft V1***;
-    * Deadline: Monday, 3rd of June 2024;
+# Commands:
+```
+py ./data_splitter_module/main.py --input-hdf5 output.h5 --output-csv data_split.csv --ratios 0.8 0.1 0.1 --seed 42 --verbose
+
+py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_split.csv --output-model-dir ./results --model 1 --device cpu --max-epochs 100 --batch-size 2 --seed 42 --verbose
+```
 
 ---------------------------------------------------------
 
 # 29th of May 2024 TODOs
-+ Implement `ResizeWithPadOrCrop` DICOM transformation;
++ Implement `ResizeWithPadOrCrop` DICOM transform;
     * Note: I only implemented `Pad` since `Crop` likely to give unwanted results;
 + Go do ACS Paper session;
     * 13:45 - 15:30, online;
@@ -77,15 +76,6 @@
 
 ---------------------------------------------------------
 
-# Commands:
-```
-py ./data_splitter_module/main.py --input-hdf5 output.h5 --output-csv data_split.csv --ratios 0.8 0.1 0.1 --seed 42 --verbose
-
-py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_split.csv --output-model-dir ./results --model 1 --device cpu --max-epochs 100 --batch-size 2 --seed 42 --verbose
-```
-
----------------------------------------------------------
-
 # Q&A meeting notes - 4th of June 2024
 
 * Ideally, they want a model trained on all data;
@@ -95,7 +85,19 @@ py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_s
 
 # Group meeting notes - 6th of June 2024
 
-* Explain what's and why's about the U-Net in the Methodology section;
-* 
+* Explain the what's and why's about the U-Net in the Methodology section;
+* Preprocessing phase description goes into Experiment(-al) Setup
+
+---------------------------------------------------------
+
+# Paper and Poster TODOs
+- Add ***Methodology section***;
+- Submit ACS assignment 4 (overdue!);
+- ACS poster session;
+    * Scheduled: Wednesday, 29th of May 2024;
+- Submit ***Poster/Paper Draft V2***;
+    * Deadline: Saturday, 8th of June 2024;
+
+- Impact on patient and doctor;
 
 ---------------------------------------------------------

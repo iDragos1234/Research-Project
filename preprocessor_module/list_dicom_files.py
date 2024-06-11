@@ -10,7 +10,7 @@ Metadata consists of:
 import os, glob, re
 
 import constants as ct
-import dicom_transforms as dt
+from dicom_transforms import PreprocessingException
 
 
 DicomFilepath = str
@@ -66,7 +66,7 @@ class ListDicomFiles:
 
         # Verify that the specified filepath points to an existing file.
         if not os.path.isfile(dicom_file_path):
-            raise dt.PreprocessingException(
+            raise PreprocessingException(
                 f'There is no file at {dicom_file_path}.'
             )
 
@@ -78,7 +78,7 @@ class ListDicomFiles:
 
         # Verify that the BoneFinder points filepath points to an existing file.
         if not os.path.isfile(points_file_path):
-            raise dt.PreprocessingException(
+            raise PreprocessingException(
                 f'There is no file at {points_file_path}.'
             )
 
@@ -89,7 +89,7 @@ class ListDicomFiles:
         elif dataset_name == ct.Dataset.OAI:
             filename_regex = ct.FilenameRegex.OAI
         else:
-            raise dt.PreprocessingException(f'Unknown dataset name. Was: {dataset_name}.')
+            raise PreprocessingException(f'Unknown dataset name. Was: {dataset_name}.')
 
         # Extract DICOM filename from the filepath.
         dicom_file_name = os.path.basename(dicom_file_path)
@@ -99,11 +99,11 @@ class ListDicomFiles:
         if match:
             subject_id, subject_visit = match.group('subject_id', 'subject_visit')
             if data_dir_subject_visit != subject_visit:
-                raise dt.PreprocessingException(
+                raise PreprocessingException(
                     f'Visit specified in directory name is different from visit specified in file name: {data_dir_subject_visit} =/= {subject_visit}.'
                 )
             return dicom_file_path, points_file_path, dataset_name, subject_id, subject_visit
-        raise dt.PreprocessingException('Filename pattern not recognized.')
+        raise PreprocessingException('Filename pattern not recognized.')
 
     @staticmethod
     def _get_dicom_files_metadata(data_dir_path: str) -> list[DicomMetadata]:
@@ -120,7 +120,7 @@ class ListDicomFiles:
         '''
         # Verify that the specified directory path is pointing to an existing directory.
         if not os.path.isdir(data_dir_path):
-            raise dt.PreprocessingException(
+            raise PreprocessingException(
                 f'The path {data_dir_path} does not point to a directory.'
             )
         
@@ -136,7 +136,7 @@ class ListDicomFiles:
                                 dicom_file_path,
                             )
                         )
-                    except dt.PreprocessingException as e:
+                    except PreprocessingException as e:
                         print(e)
 
         return dicom_files_metadata
