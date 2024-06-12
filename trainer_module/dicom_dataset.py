@@ -35,12 +35,12 @@ class DicomDataset(Dataset):
             sample = self.data[index]
             group  = hdf5_file_object[sample]
             image  = group['image']
-            mask   = group['segmentation_mask']
+            mask   = group['mask' ]
 
             # collect metadata
             meta = {
-                'group_attributes': group.attrs,
-                'image_attributes': image.attrs,
+                'group attributes': dict(group.attrs.items()),
+                'image attributes': dict(image.attrs.items()),
             }
         
         return meta
@@ -51,7 +51,7 @@ class DicomDataset(Dataset):
             sample = self.data[index]
             group  = hdf5_file_object[sample]
             image  = group['image']
-            mask   = group['mask']
+            mask   = group['mask' ]
 
             # collect metadata
             meta = {
