@@ -1,7 +1,7 @@
 import sys, argparse
 sys.path.append('./../research-project')
 
-from evaluator_module.evaluator import EvaluatorBuilder
+from evaluator import Evaluator
 from trainer_module import models
 
 
@@ -25,6 +25,12 @@ def get_args():
         required=True,
         type=str,
         help='filepath for the model state',
+    )
+    parser.add_argument(
+        '--output-stats-dir',
+        required=True,
+        type=str,
+        help='stats output directory path',
     )
     parser.add_argument(
         '--device',
@@ -76,15 +82,15 @@ def get_args():
     return parser.parse_args()
 
 
-
 def main():
 
     args = get_args()
 
-    model_evaluator = EvaluatorBuilder(
+    model_evaluator = Evaluator(
         hdf5_filepath           = args.input_hdf5,
         data_split_csv_filepath = args.input_data_split_csv,
         model_state_filepath    = args.input_model_state_filepath,
+        output_stats_dir        = args.output_stats_dir,
         device_name             = args.device,
         model_id                = args.model,
         learning_rate           = args.learning_rate,
@@ -93,7 +99,7 @@ def main():
         num_workers             = args.num_workers,
         seed                    = args.seed,
         verbose                 = args.verbose,
-    ).build()
+    )
 
     model_evaluator.evaluate()
 

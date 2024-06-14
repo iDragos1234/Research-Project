@@ -2,19 +2,12 @@ import time, tqdm, sys
 sys.path.append('./../research-project')
 sys.path.append('./../research-project/trainer_module')
 
-from matplotlib import pyplot as plt
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from monai.utils import set_determinism
 from monai.visualize import plot_2d_or_3d_image
-from monai.data import decollate_batch, DataLoader
-from monai.metrics import DiceMetric
-from monai.transforms import (
-    Activations,
-    AsDiscrete,
-    Compose,
-)
+from monai.data import decollate_batch
 
 
 from trainer_module import (
@@ -26,12 +19,43 @@ from trainer_module import (
 class Evaluator:
 
     def __init__(self,
-        model_setting: models.MyModel,
-        test_data_loader: DataLoader,
-        device: torch.device,
+        hdf5_filepath: str,
+        data_split_csv_filepath: str,
         model_state_filepath: str,
+        output_stats_dir: str,
+
+        device_name: str,
+        model_id: str,
+        learning_rate: float,
+        weight_decay: float,
+        batch_size: int,
+        num_workers: int,
+        seed: int,
         verbose: bool,
     ) -> None:
+        # Build datasets (training, validation and testing)
+        # using the split specified in the data split CSV file.
+        (
+            train_data_loader,  # <--- Not used for testing
+            valid_data_loader,  # <--- Not used for testing
+            test_data_loader,  
+        ) = data_loader_builder.DataLoaderBuilder(
+            hdf5_filepath           = hdf5_filepath,
+            data_split_csv_filepath = data_split_csv_filepath,
+            batch_size              = batch_size,
+            num_workers             = num_workers,
+            verbose                 = verbose,
+        ).build()
+
+        # Get the specified device (`'cpu'` or `'cuda'`).
+        device = torch.device(device_name)
+
+        # Fetch the selected model setting to be trained.
+        model_setting = models.MODELS[model_id](
+            learning_rate = learning_rate,
+            weight_decay  = weight_decay,
+        )
+
         # Extract model setting:
         self.model       = model_setting.model
         self.loss_func   = model_setting.loss_func
@@ -42,19 +66,20 @@ class Evaluator:
 
         self.test_data_loader = test_data_loader
 
-        self.device      = device
-        self.verbose     = verbose
+        self.device  = device
+        self.seed    = seed
+        self.verbose = verbose
 
         self.model_state_filepath = model_state_filepath
-
-        if verbose:
-            print('Evaluator initialized.')
-
+        self.output_stats_dir     = output_stats_dir
 
     def evaluate(self):
 
         if self.verbose:
             print('Starting evaluation...\n')
+
+        # Set seed for reproducibility purposes.
+        set_determinism(self.seed)
 
         # Keep track of relevant stats during testing
         stats = {
@@ -64,7 +89,7 @@ class Evaluator:
         }
 
         # Tensorboard writer to log testing metrics and predicted/actual labels.
-        writer = SummaryWriter()
+        writer = SummaryWriter(self.output_stats_dir)
 
         # Testing constants
         NUM_BATCHES = len(self.test_data_loader)
@@ -136,74 +161,3 @@ class Evaluator:
             )
 
         return
-
-
-class EvaluatorBuilder:
-
-    def __init__(self,
-        hdf5_filepath: str,
-        data_split_csv_filepath: str,
-        model_state_filepath: str,
-
-        device_name: str,
-        model_id: str,
-        learning_rate: float,
-        weight_decay: float,
-        batch_size: int,
-        num_workers: int,
-        seed: int,
-
-        verbose: bool,
-    ) -> None:
-        self.hdf5_filepath = hdf5_filepath
-        self.data_split_csv_filepath = data_split_csv_filepath
-        self.model_state_filepath = model_state_filepath
-        self.model_id = model_id
-
-        self.device_name = device_name
-
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-
-        self.seed = seed
-        self.verbose = verbose
-
-    def build(self) -> Evaluator:
-        # Set seed for reproducibility purposes.
-        set_determinism(self.seed)
-
-        # Build datasets (training, validation and testing)
-        # using the split specified in the data split CSV file.
-        (
-            train_data_loader,  # <--- Not used for testing
-            valid_data_loader,  # <--- Not used for testing
-            test_data_loader,  
-        ) = data_loader_builder.DataLoaderBuilder(
-            hdf5_filepath           = self.hdf5_filepath,
-            data_split_csv_filepath = self.data_split_csv_filepath,
-            batch_size              = self.batch_size,
-            num_workers             = self.num_workers,
-            verbose                 = self.verbose,
-        ).build()
-
-        # Get the specified device (`'cpu'` or `'cuda'`).
-        device = torch.device(self.device_name)
-
-        # Fetch the selected model setting to be trained.
-        model_setting = models.MODELS[self.model_id](
-            learning_rate = self.learning_rate,
-            weight_decay  = self.weight_decay,
-        )
-
-        # Initialize model evaluator with the selected model setting.
-        return Evaluator(
-            model_setting        = model_setting,
-            test_data_loader     = test_data_loader,
-            device               = device,
-            model_state_filepath = self.model_state_filepath,
-            verbose              = self.verbose,
-        )
-
-

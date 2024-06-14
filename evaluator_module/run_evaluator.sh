@@ -30,6 +30,7 @@ srun python ./evaluator_module/main.py \
             --input-hdf5 ./all_with_bg.h5 \
             --input-data-split-csv ./data_split.csv \
             --input-model-state-filepath ./training_v2_13-06-2024_22-00/best_metric_model.pth \
+            --output-stats-dir ./results \
             --device cuda \
             --model 2 \
             --learning-rate 1e-3 \
