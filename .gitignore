@@ -152,11 +152,12 @@ dmypy.json
 # Cython debug symbols
 cython_debug/
 
-# Do not push DICOM files or other privacy sensitive data
+# Do not push DICOM files or other patient sensitive data
 *.dcm
 *.pts
 *.h5
 *.csv
+*.png
 
 # PyCharm
 #  JetBrains specific template is maintained in a separate JetBrains.gitignore that can

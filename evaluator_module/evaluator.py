@@ -69,13 +69,14 @@ class Evaluator:
         # Testing constants
         NUM_BATCHES = len(self.test_data_loader)
 
-        # Load model to device
-        self.model.to(self.device)
 
         # Load model state from specified .pth filepath
-        self.model.load_state_dict(torch.load(self.model_state_filepath))
         if self.verbose:
-            print('Model state loaded.')
+            print('Loading model state...')
+        self.model.load_state_dict(torch.load(self.model_state_filepath))
+        
+        # Load model to device
+        self.model.to(self.device)
 
         # Set model to evaluation mode
         self.model.eval()
@@ -142,17 +143,16 @@ class EvaluatorBuilder:
     def __init__(self,
         hdf5_filepath: str,
         data_split_csv_filepath: str,
-        model_id: str,
         model_state_filepath: str,
 
         device_name: str,
-
+        model_id: str,
         learning_rate: float,
         weight_decay: float,
         batch_size: int,
         num_workers: int,
-
         seed: int,
+
         verbose: bool,
     ) -> None:
         self.hdf5_filepath = hdf5_filepath
@@ -207,38 +207,3 @@ class EvaluatorBuilder:
         )
 
 
-def main():
-
-    # model_evaluator = EvaluatorBuilder(
-    #     hdf5_filepath= './all_with_bg.h5',
-    #     data_split_csv_filepath= './data_split.csv',
-    #     model_id= '2',
-    #     model_state_filepath= './my_runs/training_v2_08-06-2024_00-00/results/best_metric_model.pth',
-    #     device_name= 'cuda',
-    #     learning_rate= 1e-3,
-    #     weight_decay= 1e-5,
-    #     batch_size= 20,
-    #     num_workers= 0,
-    #     seed= 42,
-    #     verbose= True,
-    # ).build()
-
-    model_evaluator = EvaluatorBuilder(
-        hdf5_filepath= './all_with_bg.h5',
-        data_split_csv_filepath= './data_split.csv',
-        model_id= '2',
-        model_state_filepath= './results/best_metric_model.pth',
-        device_name= 'cuda',
-        learning_rate= 1e-3,
-        weight_decay= 1e-5,
-        batch_size= 20,
-        num_workers= 0,
-        seed= 42,
-        verbose= True,
-    ).build()
-
-    model_evaluator.evaluate()
-
-
-if __name__ == '__main__':
-    main()

@@ -1,18 +1,14 @@
 import os, time, tqdm
+from typing import Union
 import numpy as np
-
 
 import torch
 from torch.utils.tensorboard import SummaryWriter
 
 from monai.utils import set_determinism
 from monai.visualize import plot_2d_or_3d_image
-from monai.data import (
-    DataLoader,
-    decollate_batch
-)
+from monai.data import decollate_batch
 
-import matplotlib.pyplot as plt
 
 import data_loader_builder
 import models
@@ -21,15 +17,48 @@ import models
 class Trainer:
 
     def __init__(self,
-        model_setting: models.MyModel,
-        train_data_loader: DataLoader,
-        valid_data_loader: DataLoader,
-        device: torch.device,
+        hdf5_filepath: str,
+        data_split_csv_filepath: str,
+        input_model_state_filepath: Union[str, None],
+        output_model_state_filepath: str,
+        model_id: str,
+
+        device_name: str,
+
+        learning_rate: float,
+        weight_decay: float,
         max_epochs: int,
-        model_dir_path: str,
+        batch_size: int,
+        num_workers: int,
         valid_interval: int,
+        output_stats_dir: str,
+
+        seed: int,
         verbose: bool,
     ) -> None:
+        # Build datasets (training, validation and testing)
+        # using the split specified in the data split CSV file.
+        (
+            train_data_loader,
+            valid_data_loader,
+            test_data_loader,  # <--- Not used for training
+        ) = data_loader_builder.DataLoaderBuilder(
+            hdf5_filepath           = hdf5_filepath,
+            data_split_csv_filepath = data_split_csv_filepath,
+            batch_size              = batch_size,
+            num_workers             = num_workers,
+            verbose                 = verbose,
+        ).build()
+
+        # Get the specified device (`'cpu'` or `'cuda'`).
+        device = torch.device(device_name)
+
+        # Fetch the selected model setting to be trained.
+        model_setting = models.MODELS[model_id](
+            learning_rate = learning_rate,
+            weight_decay  = weight_decay,
+        )
+
         # Extract model setting:
         self.model       = model_setting.model
         self.loss_func   = model_setting.loss_func
@@ -38,38 +67,25 @@ class Trainer:
         self.pre_transf  = model_setting.pre_transf
         self.post_transf = model_setting.post_transf
 
-        self.device      = device
-        self.max_epochs  = max_epochs
-        self.verbose     = verbose
+        self.input_model_state_filepath  = input_model_state_filepath
+        self.output_model_state_filepath = output_model_state_filepath
 
         self.train_data_loader = train_data_loader
         self.valid_data_loader = valid_data_loader
 
-        self.valid_interval = valid_interval
-        self.model_dir_path = model_dir_path
-
+        self.device           = device
+        self.max_epochs       = max_epochs
+        self.valid_interval   = valid_interval
+        self.output_stats_dir = output_stats_dir
+        self.seed             = seed
+        self.verbose          = verbose
 
     def train(self) -> None:
         if self.verbose:
             print('Starting training...\n')
 
-        # Get training parameters
-        model       = self.model
-        loss_func   = self.loss_func
-        metric_func = self.metric_func
-        optimizer   = self.optimizer
-        pre_transf  = self.pre_transf
-        post_transf = self.post_transf
-
-        device     = self.device
-        max_epochs = self.max_epochs
-        verbose    = self.verbose
-
-        train_data_loader = self.train_data_loader
-        valid_data_loader = self.valid_data_loader
-
-        valid_interval = self.valid_interval
-        model_dir_path = self.model_dir_path
+        # Set seed for reproducibility purposes.
+        set_determinism(self.seed)
 
         # Keep track of relevant stats during training
         stats = {
@@ -86,50 +102,56 @@ class Trainer:
 
         # Tensorboard writer for logging loss and metric values
         # used to assess the model performance after training.
-        writer = SummaryWriter()
+        writer = SummaryWriter(self.output_stats_dir)
 
         # Training constants
-        NUM_BATCHES = len(train_data_loader)
-        BATCH_SIZE  = train_data_loader.batch_size
+        NUM_BATCHES = len(self.train_data_loader)
+        BATCH_SIZE  = self.train_data_loader.batch_size
 
         # Even if verbosity is disabled, display a nice tqdm loading bar
-        loading_bar = range(max_epochs)
-        if not verbose:
+        loading_bar = range(self.max_epochs)
+        if not self.verbose:
             loading_bar = tqdm.tqdm(loading_bar)
 
+        # Load model state from specified .pth filepath
+        if self.input_model_state_filepath is not None:
+            if self.verbose:
+                print('Loading model state...')
+            self.model.load_state_dict(torch.load(self.input_model_state_filepath))
+
         # Load model to device
-        model = model.to(device) 
+        self.model = self.model.to(self.device)
 
         # Training loop
         for epoch in loading_bar:
-            if verbose:
-                print(f'Epoch {epoch + 1}/{max_epochs}')
+            if self.verbose:
+                print(f'Epoch {epoch + 1}/{self.max_epochs}')
 
             # Set model to training mode
-            model.train()
+            self.model.train()
 
             # Aggregate loss for current epoch
             epoch_train_loss = 0.0
 
             # Train on each batch of data samples
-            for train_step, train_batch_data in enumerate(train_data_loader):
+            for train_step, train_batch_data in enumerate(self.train_data_loader):
 
                 # Load batch inputs (images) and labels (masks) to the device
-                train_inputs = train_batch_data['image'].to(device)
-                train_labels = train_batch_data['mask' ].to(device)
+                train_inputs = train_batch_data['image'].to(self.device)
+                train_labels = train_batch_data['mask' ].to(self.device)
 
                 # Reset gradients
-                optimizer.zero_grad()
+                self.optimizer.zero_grad()
 
                 # Predict labels
-                train_outputs = model(train_inputs)
+                train_outputs = self.model(train_inputs)
 
                 # Compute loss
-                train_loss = loss_func(train_outputs, train_labels)
+                train_loss = self.loss_func(train_outputs, train_labels)
 
                 # Backpropagate loss
                 train_loss.backward()
-                optimizer.step()
+                self.optimizer.step()
 
                 # Decollate inputs, labels and outputs batches
                 train_inputs  = decollate_batch(train_inputs )
@@ -137,11 +159,11 @@ class Trainer:
                 train_outputs = decollate_batch(train_outputs)
 
                 # Apply the post-prediction transform, if any
-                if post_transf is not None:
-                    train_outputs = [post_transf(item) for item in train_outputs]
+                if self.post_transf is not None:
+                    train_outputs = [self.post_transf(item) for item in train_outputs]
 
                 # Compute metric
-                metric_func(y_pred = train_outputs, y = train_labels)
+                self.metric_func(y_pred = train_outputs, y = train_labels)
 
                 # Aggregate loss
                 epoch_train_loss += train_loss.item()
@@ -153,12 +175,7 @@ class Trainer:
                     global_step  = NUM_BATCHES * epoch + train_step,
                 )
 
-                # if train_step % 100 == 0:
-                #     plot_2d_or_3d_image(train_inputs,  train_step + 1,  writer, tag = 'image',  max_channels = 4)
-                #     plot_2d_or_3d_image(train_labels,  train_step + 1,  writer, tag = 'label',  max_channels = 4)
-                #     plot_2d_or_3d_image(train_outputs, train_step + 1,  writer, tag = 'output', max_channels = 4)
-
-                if verbose:
+                if self.verbose:
                     print(
                         f'{train_step + 1}/{NUM_BATCHES}, '
                         f'train loss: {train_loss.item():.4f}'
@@ -168,10 +185,10 @@ class Trainer:
             epoch_train_loss /= BATCH_SIZE
 
             # Aggregate train metric for the current epoch
-            epoch_train_metric = metric_func.aggregate().item()
+            epoch_train_metric = self.metric_func.aggregate().item()
 
             # Reset metric function
-            metric_func.reset()
+            self.metric_func.reset()
 
             # Log the mean loss and mean metric for the current train epoch
             stats['train loss values per epoch'  ].append(epoch_train_loss  )
@@ -192,23 +209,23 @@ class Trainer:
             # Validation step:
             #   - occurs periodically, with periodicity specified by `valid_interval`;
             #   - stores the best performing model state;
-            if (epoch + 1) % valid_interval == 0:
+            if (epoch + 1) % self.valid_interval == 0:
 
                 # Set model to evaluation mode
-                model.eval()
+                self.model.eval()
 
                 # Disable gradient calculation (improves performance)
                 with torch.no_grad():
 
                     # Validation loop
-                    for valid_step, valid_batch_data in enumerate(valid_data_loader):
+                    for valid_step, valid_batch_data in enumerate(self.valid_data_loader):
 
                         # Load batch inputs (images) and labels (masks) to the device
-                        valid_inputs = valid_batch_data['image'].to(device)
-                        valid_labels = valid_batch_data['mask' ].to(device)
+                        valid_inputs = valid_batch_data['image'].to(self.device)
+                        valid_labels = valid_batch_data['mask' ].to(self.device)
 
                         # Predict labels
-                        valid_outputs = model(valid_inputs)
+                        valid_outputs = self.model(valid_inputs)
 
                         # Decollate inputs, labels and outputs batches
                         valid_inputs  = decollate_batch(valid_inputs )
@@ -216,17 +233,17 @@ class Trainer:
                         valid_outputs = decollate_batch(valid_outputs)
 
                         # Apply the post-prediction transform, if any
-                        if post_transf is not None:
-                            valid_outputs = [post_transf(item) for item in valid_outputs]
+                        if self.post_transf is not None:
+                            valid_outputs = [self.post_transf(item) for item in valid_outputs]
 
                         # Compute metric
-                        metric_func(y_pred = valid_outputs, y = valid_labels)
+                        self.metric_func(y_pred = valid_outputs, y = valid_labels)
 
                     # Aggregate train metric for the current epoch
-                    epoch_valid_metric = metric_func.aggregate().item()
+                    epoch_valid_metric = self.metric_func.aggregate().item()
 
                     # Reset metric function
-                    metric_func.reset()
+                    self.metric_func.reset()
 
                     # Log the mean loss and mean metric for the current train epoch
                     stats['validation metric values per epoch'].append(epoch_valid_metric)
@@ -243,14 +260,14 @@ class Trainer:
                         best_valid_metric       = epoch_valid_metric
                         best_valid_metric_epoch = epoch + 1
                         torch.save(
-                            model.state_dict(),
-                            os.path.join(model_dir_path, 'best_metric_model.pth'),
+                            self.model.state_dict(),
+                            self.output_model_state_filepath,
                         )
                         
-                        if verbose:
+                        if self.verbose:
                             print('Saved new best metric model ')
 
-                    if verbose:
+                    if self.verbose:
                         print(
                             f'Current epoch: {epoch + 1}, '
                             f'current validation metric: {epoch_valid_metric:.4f}, '
@@ -263,23 +280,17 @@ class Trainer:
                     plot_2d_or_3d_image(valid_labels,  epoch + 1,  writer, tag = 'label',  max_channels = 4)
                     plot_2d_or_3d_image(valid_outputs, epoch + 1,  writer, tag = 'output', max_channels = 4)
 
-            # Save the last epoch model state
-            torch.save(
-                model.state_dict(),
-                os.path.join(model_dir_path, 'last_epoch_model.pth'),
-            )
-            
             # Save stats:
             np.save(
-                os.path.join(model_dir_path, 'train_loss_per_epoch.npy'),
+                os.path.join(self.output_stats_dir, 'train_loss_per_epoch.npy'),
                 stats['train loss values per epoch'],
             )
             np.save(
-                os.path.join(model_dir_path, 'train_metric_per_epoch.npy'),
+                os.path.join(self.output_stats_dir, 'train_metric_per_epoch.npy'),
                 stats['train metric values per epoch'],
             )
             np.save(
-                os.path.join(model_dir_path, 'validation_metric_per_epoch.npy'),
+                os.path.join(self.output_stats_dir, 'validation_metric_per_epoch.npy'),
                 stats['validation metric values per epoch'],
             )
         
@@ -289,7 +300,7 @@ class Trainer:
         # Calculate ellapsed time of training process
         stats['ellapsed time'] = time.time() - stats['start time']
 
-        if verbose:
+        if self.verbose:
             print(
                 f'Training completed:\n'
                 f'  - best_metric: {best_valid_metric:.4f} at epoch: {best_valid_metric_epoch};\n'
@@ -297,80 +308,3 @@ class Trainer:
             )
 
         return
-
-
-class TrainerBuilder:
-
-    def __init__(self,
-        hdf5_filepath: str,
-        data_split_csv_filepath: str,
-        model_dir_path: str,
-        model_id: str,
-
-        device_name: str,
-
-        learning_rate: float,
-        weight_decay: float,
-        max_epochs: int,
-        batch_size: int,
-        num_workers: int,
-        validation_interval: int,
-
-        seed: int,
-        verbose: bool,
-    ) -> None:
-        self.hdf5_filepath = hdf5_filepath
-        self.data_split_csv_filepath = data_split_csv_filepath
-        self.model_dir_path = model_dir_path
-        self.model_id = model_id
-
-        self.device_name = device_name
-
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
-        self.max_epochs = max_epochs
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-        self.validation_interval = validation_interval
-
-        self.seed = seed
-        self.verbose = verbose
-
-    def build(self) -> Trainer:
-        # Set seed for reproducibility purposes.
-        set_determinism(self.seed)
-
-        # Build datasets (training, validation and testing)
-        # using the split specified in the data split CSV file.
-        (
-            train_data_loader,
-            valid_data_loader,
-            test_data_loader,  # <--- Not used for training
-        ) = data_loader_builder.DataLoaderBuilder(
-            hdf5_filepath           = self.hdf5_filepath,
-            data_split_csv_filepath = self.data_split_csv_filepath,
-            batch_size              = self.batch_size,
-            num_workers             = self.num_workers,
-            verbose                 = self.verbose,
-        ).build()
-
-        # Get the specified device (`'cpu'` or `'cuda'`).
-        device = torch.device(self.device_name)
-
-        # Fetch the selected model setting to be trained.
-        model_setting = models.MODELS[self.model_id](
-            learning_rate = self.learning_rate,
-            weight_decay  = self.weight_decay,
-        )
-
-        # Initialize model trainer with the selected model setting.
-        return Trainer(
-            model_setting     = model_setting,
-            train_data_loader = train_data_loader,
-            valid_data_loader = valid_data_loader,
-            device            = device,
-            max_epochs        = self.max_epochs,
-            model_dir_path    = self.model_dir_path,
-            valid_interval    = self.validation_interval,
-            verbose           = self.verbose,
-        )

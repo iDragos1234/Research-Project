@@ -1,14 +1,12 @@
 #!/bin/bash
 
-#SBATCH --job-name="dicom_preprocessing"
+#SBATCH --job-name="preprocessing"
 #SBATCH --partition=compute
 #SBATCH --time=04:00:00
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=2GB
 #SBATCH --account=education-eemcs-courses-cse3000
-#SBATCH --output=preproc_bg.out
-#SBATCH --error=error_bg.out
 
 
 module load 2023r1

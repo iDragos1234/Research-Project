@@ -1,6 +1,6 @@
 #!/bin/bash
 
-#SBATCH --job-name="model_training"
+#SBATCH --job-name="model_evaluating"
 #SBATCH --partition=gpu
 #SBATCH --time=23:59:59
 #SBATCH --ntasks=1
@@ -26,18 +26,15 @@ module load py-tqdm
 python -m pip install --user -r /scratch/dileana/research-project/requirements.txt
 
 
-srun python /scratch/dileana/research-project/trainer_module/main.py \
-            --input-hdf5 /scratch/dileana/research-project/preprocessed_data/all_no_bg.h5 \
-            --input-data-split-csv /scratch/dileana/research-project/data_split.csv \
-            --output-model-state-filepath /scratch/dileana/research-project/results/best_model.pth \
-            --output-stats-dir /scratch/dileana/research-project/results \
-            --model 2 \
+srun python ./evaluator_module/main.py \
+            --input-hdf5 ./all_with_bg.h5 \
+            --input-data-split-csv ./data_split.csv \
+            --input-model-state-filepath ./training_v2_13-06-2024_22-00/best_metric_model.pth \
             --device cuda \
+            --model 2 \
             --learning-rate 1e-3 \
             --weight-decay 1e-5 \
-            --max-epochs 100 \
-            --batch-size 100 \
+            --batch-size 20 \
             --num-workers 0 \
-            --validation-interval 1 \
             --seed 42 \
             --verbose
