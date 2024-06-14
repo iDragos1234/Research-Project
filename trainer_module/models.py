@@ -82,8 +82,8 @@ class UNetModelV2(MyModel):
         )
 
         self.loss_func = DiceLoss(
-            include_background=False,
             softmax = True,
+            # include_background=False,
         )
 
         self.metric_func = DiceMetric(

@@ -84,7 +84,8 @@ class Evaluator:
         with torch.no_grad():
             # Testing loop
             for test_step, test_batch_data in tqdm.tqdm(enumerate(self.test_data_loader)):
-                # print(f'{test_step + 1}/{NUM_BATCHES}')
+                if self.verbose:
+                    print(f'{test_step + 1}/{NUM_BATCHES}')
                 # Load batch inputs (images) and labels (masks) to the device
                 test_inputs = test_batch_data['image'].to(self.device)
                 test_labels = test_batch_data['mask' ].to(self.device)
@@ -208,11 +209,25 @@ class EvaluatorBuilder:
 
 def main():
 
+    # model_evaluator = EvaluatorBuilder(
+    #     hdf5_filepath= './all_with_bg.h5',
+    #     data_split_csv_filepath= './data_split.csv',
+    #     model_id= '2',
+    #     model_state_filepath= './my_runs/training_v2_08-06-2024_00-00/results/best_metric_model.pth',
+    #     device_name= 'cuda',
+    #     learning_rate= 1e-3,
+    #     weight_decay= 1e-5,
+    #     batch_size= 20,
+    #     num_workers= 0,
+    #     seed= 42,
+    #     verbose= True,
+    # ).build()
+
     model_evaluator = EvaluatorBuilder(
-        hdf5_filepath= './all_no_bg.h5',
+        hdf5_filepath= './all_with_bg.h5',
         data_split_csv_filepath= './data_split.csv',
-        model_id= '1',
-        model_state_filepath= './my_runs/training_v1_05-06-2024_20-00/best_metric_model.pth',
+        model_id= '2',
+        model_state_filepath= './results/best_metric_model.pth',
         device_name= 'cuda',
         learning_rate= 1e-3,
         weight_decay= 1e-5,

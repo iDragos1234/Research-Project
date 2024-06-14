@@ -20,6 +20,8 @@ Data splitter module
 from typing import Union
 import time, csv
 import h5py, hdf5plugin  # <--- DO NOT REMOVE!
+from monai.data.utils import partition_dataset
+
 from torch import Generator
 from torch.utils.data import random_split
 
@@ -41,11 +43,6 @@ class DataSplitter:
         seed: Union[int, None],
         verbose: bool,
     ) -> None:
-        if not all(0.0 <= r <= 1.0 for r in ratios):
-            raise DataSplitException('Ratios must be in the interval [0.0, 1.0].')
-        if not (1.0 - 1e-5 <= abs(sum(ratios)) <= 1.0 + 1e-5):
-            raise DataSplitException('Ratios must sum up to 1.')
-
         self.hdf5_filepath = hdf5_filepath
         self.csv_filepath  = csv_filepath
         self.ratios        = ratios
@@ -60,7 +57,12 @@ class DataSplitter:
 
         samples    = self._find_samples(self.hdf5_filepath)
         data_split = self._split_data(samples, self.ratios, self.seed)
-        _          = self._write_to_csv_file(data_split, self.csv_filepath)
+
+        # Ignore the last dataset in the split since it is considered 'remainder' data
+        data_split = data_split[:-1] 
+        
+        # Write the data splits to the CSV file
+        self._write_to_csv_file(data_split, self.csv_filepath)
 
         if self.verbose:
             print(
@@ -88,15 +90,20 @@ class DataSplitter:
     @staticmethod
     def _split_data(
         samples: list[str],
-        ratios: list[float],
+        ratios,
         seed: Union[int, None],
     ):
+        # return partition_dataset(
+        #     samples,
+        #     ratios,
+        #     shuffle=True,
+        #     seed=seed,
+        # )
         if seed is None:
             return random_split(samples, ratios)
-
         generator = Generator().manual_seed(seed)
         return random_split(samples, ratios, generator)
-    
+
     @staticmethod
     def _write_to_csv_file(
         data_split,

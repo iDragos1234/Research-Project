@@ -33,8 +33,7 @@ def get_args():
     parser.add_argument(
         '--ratios',
         type=float,
-        nargs='*',
-        default=[1],
+        nargs='+',
         help='data split ratios',
     )
     parser.add_argument(

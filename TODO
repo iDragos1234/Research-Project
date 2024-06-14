@@ -101,3 +101,11 @@ py ./trainer_module/main.py --input-hdf5 output.h5 --input-data-split-csv data_s
 - Impact on patient and doctor;
 
 ---------------------------------------------------------
+
+# Group Meeting - 13th of June 2024
+
+* I can present non-deep-learning methods briefly
+    together with the review paper I found and discuss
+    some deep learning paper in more detail;
+
+* 

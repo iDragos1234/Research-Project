@@ -7,17 +7,17 @@ Metadata consists of:
     * subject id,
     * dubject visit.
 '''
-import os, glob, re
+import platform, os, glob, re
 
 import constants as ct
 from dicom_transforms import PreprocessingException
 
 
-DicomFilepath = str
+DicomFilepath  = str
 PointsFilepath = str
-DatasetName = str
-SubjectID = str
-SubjectVisit = str
+DatasetName    = str
+SubjectID      = str
+SubjectVisit   = str
 
 
 DicomMetadata = tuple[
@@ -51,6 +51,31 @@ class ListDicomFiles:
 
     def __call__(self) -> list[DicomMetadata]:
         return ListDicomFiles._get_dicom_files_metadata(self.data_dir_path)
+    
+    @staticmethod
+    def _get_dicom_files_metadata(data_dir_path: str) -> list[DicomMetadata]:
+        # Verify that the specified directory path is pointing to an existing directory.
+        if not os.path.isdir(data_dir_path):
+            raise PreprocessingException(
+                f'The path {data_dir_path} does not point to a directory.'
+            )
+        
+        dicom_files_metadata: list[DicomMetadata] = []
+        for dataset_name in ct.Dataset.items():
+            for patient_visit in os.listdir(f'{data_dir_path}/{dataset_name}'):
+                for dicom_file_path in glob.glob(f'{data_dir_path}/{dataset_name}/{patient_visit}/*.dcm'):
+                    try:
+                        dicom_files_metadata.append(
+                            ListDicomFiles._get_dicom_file_metadata(
+                                dataset_name,
+                                patient_visit,
+                                dicom_file_path,
+                            )
+                        )
+                    except PreprocessingException as e:
+                        print(e)
+
+        return dicom_files_metadata
 
     @staticmethod
     def _get_dicom_file_metadata(
@@ -58,9 +83,6 @@ class ListDicomFiles:
         data_dir_subject_visit: str, 
         dicom_file_path: str
     ) -> DicomMetadata:
-        '''
-        Get DICOM file metadata for a specified filepath.
-        '''
         # Normalize file path.
         dicom_file_path = os.path.normpath(dicom_file_path)
 
@@ -71,10 +93,19 @@ class ListDicomFiles:
             )
 
         # Computes the corresponding BoneFinder points filepath.
-        points_file_path = re.sub(
-            f'\\\\({ct.Dataset.CHECK}|{ct.Dataset.OAI})\\\\',
-            '\\\\\\1-pointfiles\\\\', dicom_file_path
-        ) + '.pts'
+        points_file_path: str
+        if platform.system() == 'Windows':
+            points_file_path = re.sub(
+                f'\\\\({ct.Dataset.CHECK}|{ct.Dataset.OAI})\\\\',
+                '\\\\\\1-pointfiles\\\\', 
+                dicom_file_path,
+            ) + '.pts'
+        else:
+            points_file_path = re.sub(
+                f'/({ct.Dataset.CHECK}|{ct.Dataset.OAI})/',
+                '/\\1-pointfiles/', 
+                dicom_file_path,
+            ) + '.pts'
 
         # Verify that the BoneFinder points filepath points to an existing file.
         if not os.path.isfile(points_file_path):
@@ -104,39 +135,3 @@ class ListDicomFiles:
                 )
             return dicom_file_path, points_file_path, dataset_name, subject_id, subject_visit
         raise PreprocessingException('Filename pattern not recognized.')
-
-    @staticmethod
-    def _get_dicom_files_metadata(data_dir_path: str) -> list[DicomMetadata]:
-        '''
-        Get the DICOM file metadata for all files located in the specified directory.
-
-        Parameters
-        ----------
-        data_dir_path (str): The directory path where to look for DICOM files.
-
-        Returns
-        -------
-        list[DicomMetadata]: A list of `DicomMetadata` for each DICOM file in the data directory.
-        '''
-        # Verify that the specified directory path is pointing to an existing directory.
-        if not os.path.isdir(data_dir_path):
-            raise PreprocessingException(
-                f'The path {data_dir_path} does not point to a directory.'
-            )
-        
-        dicom_files_metadata: list[DicomMetadata] = []
-        for dataset_name in ct.Dataset.items():
-            for patient_visit in os.listdir(f'{data_dir_path}/{dataset_name}'):
-                for dicom_file_path in glob.glob(f'{data_dir_path}/{dataset_name}/{patient_visit}/*.dcm'):
-                    try:
-                        dicom_files_metadata.append(
-                            ListDicomFiles._get_dicom_file_metadata(
-                                dataset_name,
-                                patient_visit,
-                                dicom_file_path,
-                            )
-                        )
-                    except PreprocessingException as e:
-                        print(e)
-
-        return dicom_files_metadata

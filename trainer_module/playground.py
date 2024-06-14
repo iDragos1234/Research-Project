@@ -2,28 +2,10 @@ import numpy as np
 import torch
 import matplotlib.pyplot as plt
 from scipy.optimize import curve_fit
-from monai.transforms import (
-    Compose,
-    Resized,
-    ScaleIntensityd,
-    SpatialPadd,
-    GaussianSharpen,
-    ImageFilter,
-    ResizeWithPadOrCropd,
-)
+from scipy.spatial.distance import cdist
 import dtw
 
 from dicom_dataset import DicomDatasetBuilder
-
-
-# keys = ['image', 'mask']
-# transform = Compose([
-#     # Resized(keys, spatial_size=(256, 256)),
-#     # SpatialPadd(keys, (512, 512)),
-#     # ScaleIntensityd(keys),
-#     # ResizeWithPadOrCropd(keys, spatial_size=512),
-# ])
-transforms = None
 
 
 datasets = DicomDatasetBuilder(
@@ -33,9 +15,7 @@ datasets = DicomDatasetBuilder(
 dataset = datasets[0]
 
 
-
-
-if True:
+if False:
     for idx, sample_id in enumerate(dataset.data):
 
         sample = dataset[idx]
@@ -57,32 +37,21 @@ if True:
 
 
 
-
-test_sample = dataset[0]
-
-image = test_sample['image']
-mask  = test_sample['mask']
-
-
-from joint_space_width.joint_space_width import joint_space_width
-min_jsw, jsw_array = joint_space_width(mask, 0.2)
-plt.title('JSW')
-plt.plot(range(len(jsw_array)), jsw_array, 'o-')
-plt.show()
-
-
-
-
-def foo(image, mask):
+def foo(
+    image,
+    mask,
+    source_pixel_spacing,
+    pixel_spacing,
+):
     # borders = torch.zeros(image[0].shape)
 
-    image = image[:, 800:1000, 500:700]
-    mask  = mask [:, 800:1000, 500:700]
+    # image = image[:, 800:1000, 500:700]
+    # mask  = mask [:, 800:1000, 500:700]
     
-    femur_head_lower = mask[0] * mask[2].roll(+1, 0)
-    femur_head_upper = mask[0].roll(-1, 0) * mask[2]
-    acetabulum_upper = mask[1] * mask[2].roll(-1, 0)
-    acetabulum_lower = mask[1].roll(+1, 0) * mask[2]
+    femur_head_lower = mask[0] * np.roll(mask[2], +1, 0)
+    femur_head_upper = mask[2] * np.roll(mask[0], -1, 0)
+    acetabulum_upper = mask[1] * np.roll(mask[2], -1, 0)
+    acetabulum_lower = mask[2] * np.roll(mask[1], +1, 0)
 
     femur_head_lower_pts = np.argwhere(femur_head_lower)
     femur_head_upper_pts = np.argwhere(femur_head_upper)
@@ -98,8 +67,10 @@ def foo(image, mask):
     combined += mask[0] + mask[1] + mask[2]
 
     # DTW
-    seqA = femur_head_pts
-    seqB = acetabulum_pts
+    seqA = femur_head_pts.T
+    seqB = acetabulum_pts.T
+
+    print(seqA.shape, seqA.dtype, seqB.shape, seqB.dtype)
 
     # Sort sequences by the x-axis
     seqA = np.array(sorted(seqA, key=lambda p: p[1]))
@@ -112,7 +83,7 @@ def foo(image, mask):
     # seqB = seqB[1:]
 
     # Get DTW alignment
-    alignment = dtw.dtw(seqA, seqB, step_pattern='asymmetric')
+    alignment = dtw.dtw(seqA, seqB, step_pattern='symmetric2')
 
     # Get array of distances
     distances = np.sqrt(np.sum(
@@ -121,7 +92,7 @@ def foo(image, mask):
     ))
 
     # Scale distances by pixel spacing
-    distances *= 0.2
+    distances *= (source_pixel_spacing / pixel_spacing)
 
     # Plot DTW alignments
     plt.figure('DTW in action')
@@ -142,19 +113,20 @@ def foo(image, mask):
     plt.show()
 
 
-foo(image, mask)
-
-
-def bar(image, mask):
-    # borders = torch.zeros(image[0].shape)
-
-    image = image[:, 880:940, 530:700]
-    mask  = mask [:, 880:940, 530:700]
+def bar(
+    image,
+    mask,
+    source_pixel_spacing,
+    pixel_spacing,
+):
     
-    femur_head_lower = mask[0] * mask[2].roll(+1, 0)
-    femur_head_upper = mask[0].roll(-1, 0) * mask[2]
-    acetabulum_upper = mask[1] * mask[2].roll(-1, 0)
-    acetabulum_lower = mask[1].roll(+1, 0) * mask[2]
+    image = image[:, 200:300, 50:200]
+    mask  = mask [:, 200:300, 50:200]
+
+    femur_head_lower = mask[0] * np.roll(mask[2], +1, 0)
+    femur_head_upper = mask[2] * np.roll(mask[0], -1, 0)
+    acetabulum_upper = mask[1] * np.roll(mask[2], -1, 0)
+    acetabulum_lower = mask[2] * np.roll(mask[1], +1, 0)
 
     femur_head_lower_pts = np.argwhere(femur_head_lower)
     femur_head_upper_pts = np.argwhere(femur_head_upper)
@@ -170,24 +142,30 @@ def bar(image, mask):
     combined += mask[0] + mask[1] + mask[2]
 
     # Sequences
-    seqA = femur_head_pts
-    seqB = acetabulum_pts
+    seqA = femur_head_pts.T
+    seqB = acetabulum_pts.T
+
+    seqA = np.array(sorted(seqA, key=lambda p: p[1]))
+    seqB = np.array(sorted(seqB, key=lambda p: p[1]))
+
+    print(seqA.shape, seqA.dtype, seqB.shape, seqB.dtype)
 
     # Optional: swap sequences
-    seqA, seqB = seqB, seqA
+    # seqA, seqB = seqB, seqA
 
     # Compute distance matrix
     matrix = np.array([
-        np.sqrt(np.sum((p - seqB) ** 2, axis=-1)) for p in seqA
+        np.sqrt(((p - seqB) ** 2).sum(axis=-1)) for p in seqA
     ])
-    matrix *= 0.2
+
+    # Scale distances to real (source) pixel spacing
+    matrix *= (source_pixel_spacing / pixel_spacing)
 
     # Compute alignment and distances
     alignment = np.argmin(matrix, axis=-1)
     alignment = list(zip(range(len(alignment)), alignment))
     
     distances = np.min(matrix, axis=-1)
-    print(distances[70:80])
 
     # Get minJSW:
     m, n = matrix.shape
@@ -210,4 +188,27 @@ def bar(image, mask):
     plt.plot(list(range(len(distances))), distances, 'o-')
     plt.show()
 
-bar(image, mask)
+
+
+for idx in range(len(dataset)):
+
+    sample = dataset[idx]
+
+    image = sample['image']
+    mask  = sample['mask' ]
+
+    meta  = dataset.get_item_meta(idx)
+
+    # foo(
+    #     image,
+    #     mask,
+    #     meta['group attributes']['source_pixel_spacing'][0],
+    #     meta['group attributes']['pixel_spacing'       ][0],
+    # )
+
+    bar(
+        image,
+        mask,
+        meta['group attributes']['source_pixel_spacing'][0],
+        meta['group attributes']['pixel_spacing'       ][0],
+    )

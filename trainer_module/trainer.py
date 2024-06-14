@@ -12,6 +12,8 @@ from monai.data import (
     decollate_batch
 )
 
+import matplotlib.pyplot as plt
+
 import data_loader_builder
 import models
 
@@ -150,6 +152,11 @@ class Trainer:
                     scalar_value = train_loss.item(),
                     global_step  = NUM_BATCHES * epoch + train_step,
                 )
+
+                # if train_step % 100 == 0:
+                #     plot_2d_or_3d_image(train_inputs,  train_step + 1,  writer, tag = 'image',  max_channels = 4)
+                #     plot_2d_or_3d_image(train_labels,  train_step + 1,  writer, tag = 'label',  max_channels = 4)
+                #     plot_2d_or_3d_image(train_outputs, train_step + 1,  writer, tag = 'output', max_channels = 4)
 
                 if verbose:
                     print(

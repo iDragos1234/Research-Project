@@ -71,11 +71,10 @@ class HipBoneSubCurve(MyEnum):
 
 
 class MaskLabel:
-    IGNORE      = 0
-    BACKGROUND  = 1
+    BACKGROUND  = 0
+    FEMUR_HEAD  = 1
     ACETABULUM  = 2
-    FEMUR       = 3
-    JOINT_SPACE = 4
+    JOINT_SPACE = 3
 
 
 class DicomAttributes(MyEnum):

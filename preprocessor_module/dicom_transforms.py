@@ -380,7 +380,7 @@ class GetBoneFinderPoints(DicomTransform):
 
 class GetSegmentationMasks(DicomTransform):
     '''
-    Compute the RGB pixel array of the segmentation mask,
+    Compute the one-hot encoded segmentation mask,
     highlighting the various components of the hip, 
     for each of the right and left sides of the hip.
     '''
@@ -452,14 +452,18 @@ class GetSegmentationMasks(DicomTransform):
                 mask_shape,
                 (pad_offset + regions['femur'] / pixel_spacing)[:, [1, 0]],
             )
+
             acetabulum_mask = polygon2mask(
                 mask_shape,
                 (pad_offset + regions['acetabulum'] / pixel_spacing)[:, [1, 0]],
             )
+
             joint_space_mask = polygon2mask(
                 mask_shape,
                 (pad_offset + regions['joint space'] / pixel_spacing)[:, [1, 0]],
             )
+
+            background_mask = ~(femur_mask + acetabulum_mask + joint_space_mask)
             
             # Create combined mask as an ndarray of masks for each region.
             # Note that the joint space mask is larger than the true area,
@@ -467,41 +471,26 @@ class GetSegmentationMasks(DicomTransform):
             combined_mask = np.zeros(shape=mask_shape, dtype=np.uint8)
             combined_mask = combined_mask[None]
 
-            if self.include_background_mask:
-                combined_mask = np.repeat(
-                    combined_mask,
-                    repeats = 1 + len(regions),
-                    axis = 0,
-                )
-                
-                background_mask = ~(femur_mask + acetabulum_mask + joint_space_mask)
+            combined_mask = np.repeat(
+                combined_mask,
+                repeats = 1 + len(regions),
+                axis = 0,
+            )
 
-                # NOTE: background must be channel 0, 
-                # since it is not included in the loss 
-                # calculation during training
-                combined_mask[0][background_mask]  = 1
-                combined_mask[1][femur_mask]       = 1
-                combined_mask[2][acetabulum_mask]  = 1
-                combined_mask[3][joint_space_mask] = 1
+            # NOTE: background must be channel 0, since it is not
+            # included in the loss calculation during training
+            combined_mask[0][background_mask ] = 1
+            combined_mask[1][femur_mask      ] = 1
+            combined_mask[2][acetabulum_mask ] = 1
+            combined_mask[3][joint_space_mask] = 1
 
-                # Eliminate additional pixels from the joint space mask
-                combined_mask[3][femur_mask]       = 0
-                combined_mask[3][acetabulum_mask]  = 0
+            # Eliminate additional pixels from the joint space mask
+            combined_mask[3][femur_mask      ] = 0
+            combined_mask[3][acetabulum_mask ] = 0
 
-            else:
-                combined_mask = np.repeat(
-                    combined_mask,
-                    repeats = len(regions),
-                    axis = 0,
-                )
-
-                combined_mask[0][femur_mask]       = 1
-                combined_mask[1][acetabulum_mask]  = 1
-                combined_mask[2][joint_space_mask] = 1
-
-                # Eliminate additional pixels from the joint space mask
-                combined_mask[2][femur_mask]       = 0
-                combined_mask[2][acetabulum_mask]  = 0
+            # If specified, remove background mask
+            if not self.include_background_mask:
+                combined_mask = combined_mask[1:]
 
             # Assign the combined mask to the current side of the body being segmented.
             if hip_side == ct.HipSide.RIGHT:
@@ -510,7 +499,7 @@ class GetSegmentationMasks(DicomTransform):
                 dicom.left_segmentation_mask = combined_mask
             else:
                 raise PreprocessingException(
-                    f'Side must be either `\'{ct.HipSide.RIGHT}\'` or `\'{ct.HipSide.LEFT}\'`.'
+                    f'Side must be either `{ct.HipSide.RIGHT}` or `{ct.HipSide.LEFT}`.'
                     f'Was: `{hip_side}`'
                 )
         return dicom

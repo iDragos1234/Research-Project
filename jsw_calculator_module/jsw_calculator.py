@@ -75,17 +75,28 @@ class JSWCalculator:
                     test_outputs = [self.post_transf(item) for item in test_outputs]
 
                 test_labels  = np.array(test_labels)
+                test_outputs = np.array(test_outputs)
 
                 print(type(test_labels), type(test_outputs))
 
                 source_pixel_spacing = dataset.get_item_meta(test_step)['group attributes']['source_pixel_spacing'][0]
                 pixel_spacing = dataset.get_item_meta(test_step)['group attributes']['pixel_spacing'][0]
 
-                print(contour_mjsw(test_outputs[0], source_pixel_spacing, pixel_spacing))
-                print(contour_mjsw(test_labels [0], source_pixel_spacing, pixel_spacing))
+                # print(contour_mjsw (test_outputs[0], source_pixel_spacing, pixel_spacing))
+                # print(contour_mjsw (test_labels [0], source_pixel_spacing, pixel_spacing))
                 
-                print(dtw_jsw(test_outputs[0], source_pixel_spacing, pixel_spacing)[0])
-                print(dtw_jsw(test_labels [0], source_pixel_spacing, pixel_spacing)[0])
+                # print(dtw_jsw      (test_outputs[0], source_pixel_spacing, pixel_spacing)[0])
+                # print(dtw_jsw      (test_labels [0], source_pixel_spacing, pixel_spacing)[0])
+
+                plt.subplot(1, 2, 1)
+                mJSW, minX, minY = euclidean_jsw(test_labels[0], source_pixel_spacing, pixel_spacing)
+                print(mJSW, minX, minY)
+                plt.imshow(sum((i + 1) * xs for (i, xs) in enumerate(test_labels[0])), 'magma')
+
+                plt.subplot(1, 2, 2)
+                mJSW, minX, minY = euclidean_jsw(test_outputs[0], source_pixel_spacing, pixel_spacing)
+                plt.imshow(sum((i + 1) * xs for (i, xs) in enumerate(test_outputs[0])), 'magma')
+                plt.show()
 
         return
 
@@ -152,6 +163,9 @@ class JSWCalculatorBuilder:
         )
 
 
+class JSWException(Exception):
+    def __init__(self, *args: object) -> None:
+        super().__init__(*args)
 
 
 
@@ -172,6 +186,59 @@ def contour_mjsw(
     mJSW = np.min(cdist(femur_head, acetabulum)) * (source_pixel_spacing / pixel_spacing)
 
     return mJSW
+
+
+def euclidean_jsw(
+    mask: torch.tensor,
+    source_pixel_spacing: float = None,
+    pixel_spacing: float = None,
+) -> tuple[float, np.array]:
+    
+    # If background included in the mask, omit the background mask
+    if mask.shape[0] == 4:
+        mask = mask[1:]    
+    elif mask.shape[0] != 3:
+        raise JSWException(f'Unsupported mask shape. Was: {mask.shape}.')
+
+    femur_head_lower = mask[0] * np.roll(mask[2], +1, 0)
+    femur_head_upper = mask[2] * np.roll(mask[0], -1, 0)
+    acetabulum_upper = mask[1] * np.roll(mask[2], -1, 0)
+    acetabulum_lower = mask[2] * np.roll(mask[1], +1, 0)
+
+    femur_head_lower_pts = np.argwhere(femur_head_lower)
+    femur_head_upper_pts = np.argwhere(femur_head_upper)
+    acetabulum_upper_pts = np.argwhere(acetabulum_upper)
+    acetabulum_lower_pts = np.argwhere(acetabulum_lower)
+
+    femur_head_pts = (femur_head_lower_pts + femur_head_upper_pts) / 2
+    acetabulum_pts = (acetabulum_lower_pts + acetabulum_upper_pts) / 2
+
+    # Create combined mask
+    combined = 2 * (femur_head_lower + acetabulum_upper) + \
+               3 * (femur_head_upper + acetabulum_lower)
+    combined += mask[0] + mask[1] + mask[2]
+
+    # Sequences
+    seqA = femur_head_pts
+    seqB = acetabulum_pts
+
+    seqA = np.array(sorted(seqA, key=lambda p: p[1]))
+    seqB = np.array(sorted(seqB, key=lambda p: p[1]))
+
+    # Compute distance matrix
+    dist_matrix = np.array([
+        np.sqrt(((p - seqB) ** 2).sum(axis=-1)) for p in seqA
+    ])
+
+    # Scale distances to real (source) pixel spacing
+    dist_matrix *= (source_pixel_spacing / pixel_spacing)
+
+    # Get minJSW:
+    m, n = dist_matrix.shape
+    idx = np.argmin(dist_matrix)
+    minX, minY = idx // n, idx % n
+    mJSW = dist_matrix[minX, minY]
+    return mJSW, minX, minY
 
 
 
@@ -280,16 +347,16 @@ def _plot_dtw_results(query, reference, alignment, jsw_array):
 def main():
 
     jsw_calculator = JSWCalculatorBuilder(
-        hdf5_filepath= './all_no_bg.h5',
-        data_split_csv_filepath= './data_split.csv',
-        model_id= '1',
-        model_state_filepath= './my_runs/training_v1_05-06-2024_20-00/best_metric_model.pth',
-        learning_rate= 1e-3,
-        weight_decay= 1e-5,
-        batch_size= 1,
-        num_workers= 0,
-        seed= 42,
-        verbose= True,
+        hdf5_filepath = './all_with_bg.h5',
+        data_split_csv_filepath = './data_split.csv',
+        model_id = '1',
+        model_state_filepath = './my_runs/training_v2_08-06-2024_00-00/results/best_metric_model.pth', # './my_runs/training_v1_05-06-2024_20-00/best_metric_model.pth',
+        learning_rate = 1e-3,
+        weight_decay = 1e-5,
+        batch_size = 1,
+        num_workers = 0,
+        seed = 42,
+        verbose = True,
     ).build()
 
     jsw_calculator.calculate_jsw()
