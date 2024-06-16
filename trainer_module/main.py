@@ -14,8 +14,6 @@ def main() -> None:
 
         model_id         = args.model,
         device_name      = args.device,
-        learning_rate    = args.learning_rate,
-        weight_decay     = args.weight_decay,
         max_epochs       = args.max_epochs,
         batch_size       = args.batch_size,
         num_workers      = args.num_workers,
@@ -78,18 +76,6 @@ def get_args() -> argparse.Namespace:
         type=str,
         default='cpu',
         help='device on which to train the model',
-    )
-    parser.add_argument(
-        '--learning-rate',
-        type=float,
-        default=1e-3,
-        help='learning rate',
-    )
-    parser.add_argument(
-        '--weight-decay',
-        type=float,
-        default=0,
-        help='weight decay',
     )
     parser.add_argument(
         '--max-epochs',

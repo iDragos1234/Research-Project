@@ -25,8 +25,6 @@ class Trainer:
 
         device_name: str,
 
-        learning_rate: float,
-        weight_decay: float,
         max_epochs: int,
         batch_size: int,
         num_workers: int,
@@ -54,10 +52,7 @@ class Trainer:
         device = torch.device(device_name)
 
         # Fetch the selected model setting to be trained.
-        model_setting = models.MODELS[model_id](
-            learning_rate = learning_rate,
-            weight_decay  = weight_decay,
-        )
+        model_setting = models.MODELS[model_id]
 
         # Extract model setting:
         self.model       = model_setting.model

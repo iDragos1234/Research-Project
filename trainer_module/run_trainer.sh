@@ -33,8 +33,6 @@ srun python /scratch/dileana/research-project/trainer_module/main.py \
             --output-stats-dir /scratch/dileana/research-project/results \
             --model 2 \
             --device cuda \
-            --learning-rate 1e-3 \
-            --weight-decay 1e-5 \
             --max-epochs 100 \
             --batch-size 100 \
             --num-workers 0 \

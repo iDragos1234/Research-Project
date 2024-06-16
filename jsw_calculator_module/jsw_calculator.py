@@ -109,8 +109,6 @@ class JSWCalculatorBuilder:
         model_id: str,
         model_state_filepath: str,
 
-        learning_rate: float,
-        weight_decay: float,
         batch_size: int,
         num_workers: int,
 
@@ -122,8 +120,6 @@ class JSWCalculatorBuilder:
         self.model_state_filepath = model_state_filepath
         self.model_id = model_id
 
-        self.learning_rate = learning_rate
-        self.weight_decay = weight_decay
         self.batch_size = batch_size
         self.num_workers = num_workers
 
@@ -149,10 +145,7 @@ class JSWCalculatorBuilder:
         ).build()
 
         # Fetch the selected model setting to be trained.
-        model_setting = models.MODELS[self.model_id](
-            learning_rate = self.learning_rate,
-            weight_decay  = self.weight_decay,
-        )
+        model_setting = models.MODELS[self.model_id]
 
         # Initialize model evaluator with the selected model setting.
         return JSWCalculator(
@@ -351,8 +344,6 @@ def main():
         data_split_csv_filepath = './data_split.csv',
         model_id = '1',
         model_state_filepath = './my_runs/training_v2_08-06-2024_00-00/results/best_metric_model.pth', # './my_runs/training_v1_05-06-2024_20-00/best_metric_model.pth',
-        learning_rate = 1e-3,
-        weight_decay = 1e-5,
         batch_size = 1,
         num_workers = 0,
         seed = 42,

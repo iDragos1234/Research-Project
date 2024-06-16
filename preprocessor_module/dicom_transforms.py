@@ -110,8 +110,9 @@ class GetPixelArray(DicomTransform):
         # Ensure that the initial image is 2D.
         if pixel_array.ndim != 2:
             raise PreprocessingException(
-                f'Unexpected `pixel_arrray.ndim`.'
-                f'Was: {pixel_array.ndim}.'
+                f'Unexpected `pixel_arrray.ndim`. '
+                f'Was: {pixel_array.ndim}. '
+                f'File: {dicom.dicom_filepath}.'
             )
 
         # Get the initial shape of the pixel array
@@ -136,7 +137,7 @@ class GetSourcePixelSpacing(DicomTransform):
             dicom.dicom_file_object.get(ct.DicomAttributes.IMAGER_PIXEL_SPACING)
         
         if pixel_spacing is None:
-            raise PreprocessingException('No pixel spacing found.')
+            raise PreprocessingException(f'No pixel spacing found. File: {dicom.dicom_filepath}.')
         
         pixel_spacing: tuple[float, float] = tuple(pixel_spacing)
 
@@ -144,6 +145,7 @@ class GetSourcePixelSpacing(DicomTransform):
             raise PreprocessingException(
                 f'Anisotropic pixel spacing is untested.'
                 f'Was: {pixel_spacing}.'
+                f'File: {dicom.dicom_filepath}.'
             )
 
         dicom.source_pixel_spacing = pixel_spacing
@@ -168,7 +170,8 @@ class CheckPhotometricInterpretation(DicomTransform):
             dicom.pixel_array = np.max(pixel_array) - pixel_array
         elif photo_interp != ct.PhotometricInterpretation.MONOCHROME2:
             raise PreprocessingException(
-                f'Photometric interpretation {photo_interp} not supported.'
+                f'Photometric interpretation {photo_interp} not supported. '
+                f'File: {dicom.dicom_filepath}.'
             )
         return dicom
     
@@ -184,8 +187,9 @@ class CheckVoilutFunction(DicomTransform):
         )
         if voilut_func != ct.VoilutFunction.LINEAR:
             raise PreprocessingException(
-                f'Only supporting VOILUTFunction LINEAR.'
-                f'Was: {voilut_func}.'
+                f'Only supporting VOILUTFunction LINEAR. '
+                f'Was: {voilut_func}. '
+                f'File: {dicom.dicom_filepath}.'
             )
         return dicom
     
@@ -211,7 +215,7 @@ class PercentilesIntensityNormalization(DicomTransform):
     def __init__(self, percentiles: tuple[float, float]) -> None:
         if percentiles is not None:
             if not all(0.0 <= p <= 100.0 for p in percentiles):
-                raise PreprocessingException('Percentiles must be in the interval [0.0, 100.0].')
+                raise PreprocessingException('Percentiles must be in the interval [0.0, 100.0]. ')
             if len(percentiles) != 2:
                 raise PreprocessingException('Accepting exactly two percentiles.')
         self.percentiles = percentiles
@@ -275,7 +279,7 @@ class RescaleToTargetPixelSpacing(DicomTransform):
         if target_pixel_spacing is not None \
             and target_pixel_spacing[0] != target_pixel_spacing[1]:
             raise PreprocessingException(
-                f'Anisotropic pixel spacing is not supported.'
+                f'Anisotropic pixel spacing is not supported. '
                 f'Was: {target_pixel_spacing}.'
             )
         self.target_pixel_spacing = target_pixel_spacing
@@ -322,7 +326,8 @@ class PadSymmetrically(DicomTransform):
         if current_shape[0] > target_shape[0] or \
            current_shape[1] > target_shape[1]:
             raise PreprocessingException(
-                f'Cannot pad image with shape {current_shape} to smaller target shape {target_shape}.'
+                f'Cannot pad image with shape {current_shape} to smaller target shape {target_shape}. '
+                f'File: {dicom.dicom_filepath}.'
             )
         
         vertical_pad   = target_shape[0] - current_shape[0]
@@ -371,7 +376,10 @@ class GetBoneFinderPoints(DicomTransform):
                 or lines[2]     != '{' \
                 or lines[163]   != '}' \
                 or points.shape != (n_points, 2):
-                raise PreprocessingException('Points file structure is invalid.')
+                raise PreprocessingException(
+                    'Points file structure is invalid.'
+                    f'File: {dicom.dicom_filepath}.'
+                )
 
             dicom.bonefinder_points = points
 
@@ -499,8 +507,9 @@ class GetSegmentationMasks(DicomTransform):
                 dicom.left_segmentation_mask = combined_mask
             else:
                 raise PreprocessingException(
-                    f'Side must be either `{ct.HipSide.RIGHT}` or `{ct.HipSide.LEFT}`.'
-                    f'Was: `{hip_side}`'
+                    f'Side must be either `{ct.HipSide.RIGHT}` or `{ct.HipSide.LEFT}`. '
+                    f'Was: `{hip_side}`. '
+                    f'File: {dicom.dicom_filepath}.'
                 )
         return dicom
 
@@ -531,7 +540,8 @@ class Flip(DicomTransform):
         ):
             raise PreprocessingException(
                 'Image and masks must have the same '
-                'number of dimensions to be flipped.'
+                'number of dimensions to be flipped. '
+                f'File: {dicom.dicom_filepath}.'
             )
 
 
@@ -570,8 +580,9 @@ class AppendDicomToHDF5(DicomTransform):
             segmentation_mask = dicom.left_segmentation_mask
         else:
             raise PreprocessingException(
-                f'Hip side can be either `\'{ct.HipSide.RIGHT}\'` or `\'{ct.HipSide.LEFT}\'`.'
-                f'Was: {self.hip_side}.'
+                f'Hip side can be either `\'{ct.HipSide.RIGHT}\'` or `\'{ct.HipSide.LEFT}\'`. '
+                f'Was: {self.hip_side}. '
+                f'File: {dicom.dicom_filepath}.'
             )
 
         # Write to hdf5:

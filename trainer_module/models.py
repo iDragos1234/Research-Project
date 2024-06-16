@@ -8,10 +8,14 @@ from torch.optim import (
 from monai.losses import (
     DiceLoss,
     DiceCELoss,
+    DiceFocalLoss,
+    HausdorffDTLoss,
 )
 from monai.metrics import (
     Metric,
     DiceMetric,
+    MeanIoU,
+    HausdorffDistanceMetric,
 )
 from monai.transforms import (
     Transform,
@@ -33,10 +37,7 @@ class MyModel:
 
 class UNetModelV1(MyModel):
 
-    def __init__(self,
-        learning_rate: float,
-        weight_decay: float,
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__()
 
         self.model = UNet(
@@ -48,13 +49,17 @@ class UNetModelV1(MyModel):
             num_res_units=2,
         )
 
+        self.learning_rate = 1e-3
+        self.weight_decay  = 1e-5
+
         self.loss_func = DiceLoss(sigmoid=True)
 
         self.metric_func = DiceMetric()
+
         self.optimizer = Adam(
-            params=self.model.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay,
+            params       = self.model.parameters(),
+            lr           = self.learning_rate,
+            weight_decay = self.weight_decay,
         )
 
         self.pre_transf = None
@@ -66,10 +71,7 @@ class UNetModelV1(MyModel):
 
 class UNetModelV2(MyModel):
 
-    def __init__(self,
-        learning_rate: float,
-        weight_decay: float,
-    ) -> None:
+    def __init__(self) -> None:
         super().__init__()
 
         self.model = UNet(
@@ -81,19 +83,17 @@ class UNetModelV2(MyModel):
             num_res_units = 2,
         )
 
-        self.loss_func = DiceLoss(
-            softmax = True,
-            # include_background=False,
-        )
+        self.learning_rate = 1e-3
+        self.weight_decay  = 1e-5
 
-        self.metric_func = DiceMetric(
-            include_background = False,
-        )
+        self.loss_func = DiceLoss(softmax = True)
+
+        self.metric_func = DiceMetric(include_background = False)
 
         self.optimizer = Adam(
-            params=self.model.parameters(),
-            lr=learning_rate,
-            weight_decay=weight_decay,
+            params       = self.model.parameters(),
+            lr           = self.learning_rate,
+            weight_decay = self.weight_decay,
         )
 
         self.pre_transf = None
@@ -106,7 +106,7 @@ class UNetModelV2(MyModel):
         ])
 
 
-MODELS = {
-    '1': UNetModelV1,  # U-Net, Dice loss, sigmoid activation, Dice metric
-    '2': UNetModelV2,  # U-Net, Dice loss, softmax activation, Dice metric
+MODELS: dict[str, MyModel] = {
+    '1': UNetModelV1(),  # U-Net, Dice loss, sigmoid activation, Dice metric, learning rate = 1e-3, weight decay = 1e-5, 
+    '2': UNetModelV2(),  # U-Net, Dice loss, softmax activation, Dice metric, learning rate = 1e-3, weight decay = 1e-5, 
 }

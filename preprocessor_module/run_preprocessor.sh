@@ -26,5 +26,5 @@ srun python /scratch/dileana/research-project/preprocessor_module/main.py \
             --percentile-normalization 5 95 \
             --target-pixel-spacing 0.9 0.9 \
             --target-pixel-array-shape 512 512 \
-            --include_background-mask \
+            --include-background-mask \
             --verbose

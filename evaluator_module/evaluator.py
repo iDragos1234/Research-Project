@@ -26,8 +26,6 @@ class Evaluator:
 
         device_name: str,
         model_id: str,
-        learning_rate: float,
-        weight_decay: float,
         batch_size: int,
         num_workers: int,
         seed: int,
@@ -51,16 +49,13 @@ class Evaluator:
         device = torch.device(device_name)
 
         # Fetch the selected model setting to be trained.
-        model_setting = models.MODELS[model_id](
-            learning_rate = learning_rate,
-            weight_decay  = weight_decay,
-        )
+        model_setting = models.MODELS[model_id]
 
         # Extract model setting:
         self.model       = model_setting.model
         self.loss_func   = model_setting.loss_func
         self.metric_func = model_setting.metric_func
-        self.optimizer   = model_setting.optimizer
+        # self.optimizer   = model_setting.optimizer
         self.pre_transf  = model_setting.pre_transf
         self.post_transf = model_setting.post_transf
 

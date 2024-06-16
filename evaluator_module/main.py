@@ -46,18 +46,6 @@ def get_args():
         help='id of the model to test',
     )
     parser.add_argument(
-        '--learning-rate',
-        type=float,
-        default=1e-3,
-        help='learning rate',
-    )
-    parser.add_argument(
-        '--weight-decay',
-        type=float,
-        default=0,
-        help='weight decay',
-    )
-    parser.add_argument(
         '--batch-size',
         type=int,
         default=100,
@@ -93,8 +81,6 @@ def main():
         output_stats_dir        = args.output_stats_dir,
         device_name             = args.device,
         model_id                = args.model,
-        learning_rate           = args.learning_rate,
-        weight_decay            = args.weight_decay,
         batch_size              = args.batch_size,
         num_workers             = args.num_workers,
         seed                    = args.seed,

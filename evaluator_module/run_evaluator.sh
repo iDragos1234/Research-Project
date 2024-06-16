@@ -33,8 +33,6 @@ srun python ./evaluator_module/main.py \
             --output-stats-dir ./results \
             --device cuda \
             --model 2 \
-            --learning-rate 1e-3 \
-            --weight-decay 1e-5 \
             --batch-size 20 \
             --num-workers 0 \
             --seed 42 \
