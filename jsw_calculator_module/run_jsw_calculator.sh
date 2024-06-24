@@ -1,10 +1,9 @@
 #!/bin/bash
 
-#SBATCH --job-name="model_evaluating"
-#SBATCH --partition=gpu
+#SBATCH --job-name="calculate_jsw"
+#SBATCH --partition=compute
 #SBATCH --time=23:59:59
 #SBATCH --ntasks=1
-#SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=2GB
 #SBATCH --account=education-eemcs-courses-cse3000
@@ -26,14 +25,11 @@ module load py-tqdm
 python -m pip install --user -r /scratch/dileana/research-project/requirements.txt
 
 
-srun python ./evaluator_module/main.py \
+srun python /scratch/dileana/research-project/jsw_calculator_module/main.py \
             --input-hdf5 ./all_with_bg.h5 \
             --input-data-split-csv ./data_split.csv \
             --input-model-state-filepath ./training_v2_13-06-2024_22-00/best_metric_model.pth \
-            --output-stats-dir ./results \
-            --device cuda \
+            --output-dir ./jsw_results \
             --model 2 \
-            --batch-size 20 \
-            --num-workers 0 \
             --seed 42 \
             --verbose

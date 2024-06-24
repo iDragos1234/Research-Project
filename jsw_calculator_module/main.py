@@ -2,8 +2,8 @@ import sys, argparse
 sys.path.append('./../research-project')
 sys.path.append('./../research-project/trainer_module')
 
-from evaluator import Evaluator
 from trainer_module import models
+from jsw_calculator import JSWCalculator
 
 
 def get_args():
@@ -13,7 +13,7 @@ def get_args():
         '--input-hdf5',
         required=True,
         type=str,
-        help='input HDF5 (.h5) filepath containing the preprocessed data',
+        help='input HDF5 (.h5) filepath',
     )
     parser.add_argument(
         '--input-data-split-csv',
@@ -22,41 +22,23 @@ def get_args():
         help='csv filepath where data split is specified',
     )
     parser.add_argument(
-        '--input-model-state-filepath',
+        '--output-dir',
         required=True,
         type=str,
-        help='filepath for the model state',
-    )
-    parser.add_argument(
-        '--output-stats-dir',
-        required=True,
-        type=str,
-        help='stats output directory path',
-    )
-    parser.add_argument(
-        '--device',
-        type=str,
-        default='cpu',
-        help='device on which to test the model',
+        help='directory path to output the JSW results',
     )
     parser.add_argument(
         '--model',
         required=True,
         type=str,
         choices=list(models.MODELS.keys()),
-        help='id of the model to test',
+        help='id of the model to train',
     )
     parser.add_argument(
-        '--batch-size',
-        type=int,
-        default=100,
-        help='data loaders batch size',
-    )
-    parser.add_argument(
-        '--num-workers',
-        type=int,
-        default=0,
-        help='data loaders number of workers parameter',
+        '--input-model-state-filepath',
+        type=str,
+        default=None,
+        help='filepath for the initial model state; optional',
     )
     parser.add_argument(
         '--seed',
@@ -75,21 +57,17 @@ def main():
 
     args = get_args()
 
-    model_evaluator = Evaluator(
+    jsw_calculator = JSWCalculator(
         hdf5_filepath           = args.input_hdf5,
         data_split_csv_filepath = args.input_data_split_csv,
-        model_state_filepath    = args.input_model_state_filepath,
-        output_stats_dir        = args.output_stats_dir,
-        device_name             = args.device,
         model_id                = args.model,
-        batch_size              = args.batch_size,
-        num_workers             = args.num_workers,
+        model_state_filepath    = args.input_model_state_filepath,
+        output_dir              = args.output_dir,
         seed                    = args.seed,
         verbose                 = args.verbose,
     )
 
-    model_evaluator.evaluate()
-
+    jsw_calculator.calculate_jsw()
 
 if __name__ == '__main__':
     main()

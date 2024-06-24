@@ -43,6 +43,12 @@ class DataSplitter:
         seed: Union[int, None],
         verbose: bool,
     ) -> None:
+        if not all(0.0 <= r <= 1.0 for r in ratios):
+            raise DataSplitException('Ratios must be in the interval [0.0, 1.0].')
+        
+        if sum(ratios) > 1.0:
+            raise DataSplitException('Summed ratios must not be greater than 1.0.')
+
         self.hdf5_filepath = hdf5_filepath
         self.csv_filepath  = csv_filepath
         self.ratios        = ratios
@@ -54,6 +60,9 @@ class DataSplitter:
             print('Starting data splitting...')
 
         start_time = time.time()
+
+        # Add a ratio for the 'remainder' data
+        self.ratios.append(1.0 - sum(self.ratios))
 
         samples    = self._find_samples(self.hdf5_filepath)
         data_split = self._split_data(samples, self.ratios, self.seed)

@@ -16,7 +16,7 @@ module load python/3.9.8
 module load py-pip
 module load py-h5py
 module load py-numpy
-module load py-torch
+# module load py-torch
 
 
 python -m pip install --user -r /scratch/dileana/research-project/requirements.txt

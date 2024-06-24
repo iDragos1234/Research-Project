@@ -192,7 +192,21 @@ class CheckVoilutFunction(DicomTransform):
                 f'File: {dicom.dicom_filepath}.'
             )
         return dicom
-    
+
+
+class ZScoreIntensityNormalization(DicomTransform):
+
+    def __call__(self, dicom: DicomContainer) -> DicomContainer:
+
+        pixel_array = dicom.pixel_array.astype(float)
+
+        mean    = np.mean(pixel_array)
+        std_dev = np.std (pixel_array)
+
+        dicom.pixel_array = (pixel_array - mean) / std_dev
+
+        return dicom
+
 
 class PercentilesIntensityNormalization(DicomTransform):
     '''
@@ -217,7 +231,7 @@ class PercentilesIntensityNormalization(DicomTransform):
             if not all(0.0 <= p <= 100.0 for p in percentiles):
                 raise PreprocessingException('Percentiles must be in the interval [0.0, 100.0]. ')
             if len(percentiles) != 2:
-                raise PreprocessingException('Accepting exactly two percentiles.')
+                raise PreprocessingException('Accepting only two percentiles.')
         self.percentiles = percentiles
 
     def __call__(self, dicom: DicomContainer) -> DicomContainer:
@@ -225,8 +239,7 @@ class PercentilesIntensityNormalization(DicomTransform):
         if self.percentiles is None:
             return dicom
 
-        pixel_array = dicom.pixel_array
-        pixel_array = pixel_array.astype(float)
+        pixel_array = dicom.pixel_array.astype(float)
 
         percentiles = np.percentile(
             pixel_array.flatten(),
@@ -236,10 +249,7 @@ class PercentilesIntensityNormalization(DicomTransform):
         intensity_offset = float(percentiles[0])
         intensity_slope  = float(percentiles[1] - percentiles[0])
 
-        pixel_array -= intensity_offset
-        pixel_array /= intensity_slope
-
-        dicom.pixel_array      = pixel_array
+        dicom.pixel_array = (pixel_array - intensity_offset) / intensity_slope
 
         return dicom
     
@@ -338,12 +348,11 @@ class PadSymmetrically(DicomTransform):
         dicom.left_pad   = horizontal_pad // 2
         dicom.right_pad  = horizontal_pad // 2 + horizontal_pad % 2
 
-        # Since the image and masks are 3D,
-        # and the intention is to pad the 2D image
-        # wrapped in the additional dimension,
+        # Since the image and masks are 3D, and the intention is to pad the 2D image
+        # wrapped in one additional dimension (i.e., shape is 1 x height x width), 
         # the first dimension is not padded.
         pad = (
-            (0, 0),
+            (0, 0),  # <--- no pad on first dimension
             (dicom.top_pad, dicom.bottom_pad),
             (dicom.right_pad, dicom.left_pad),
         )

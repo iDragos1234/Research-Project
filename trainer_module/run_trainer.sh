@@ -17,7 +17,7 @@ module load python/3.9.8
 module load py-pip
 module load py-h5py
 module load py-numpy
-module load py-torch
+# module load py-torch
 module load py-scikit-learn
 module load py-tensorboard
 module load py-tqdm
@@ -33,8 +33,8 @@ srun python /scratch/dileana/research-project/trainer_module/main.py \
             --output-stats-dir /scratch/dileana/research-project/results \
             --model 2 \
             --device cuda \
-            --max-epochs 100 \
-            --batch-size 100 \
+            --max-epochs 50 \
+            --batch-size 20 \
             --num-workers 0 \
             --validation-interval 1 \
             --seed 42 \

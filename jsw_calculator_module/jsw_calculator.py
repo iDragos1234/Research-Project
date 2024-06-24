@@ -1,4 +1,7 @@
+import os
 import sys
+
+import tqdm
 sys.path.append('./../research-project')
 sys.path.append('./../research-project/trainer_module')
 
@@ -23,11 +26,35 @@ from trainer_module import (
 class JSWCalculator:
 
     def __init__(self,
-        model_setting: models.MyModel,
-        test_data_loader: DataLoader,
+        hdf5_filepath: str,
+        data_split_csv_filepath: str,
+        model_id: str,
         model_state_filepath: str,
+        output_dir: str,
+        seed: int,
         verbose: bool,
     ) -> None:
+        
+        # Set seed for reproducibility purposes.
+        set_determinism(seed)
+
+        # Build datasets (training, validation and testing)
+        # using the split specified in the data split CSV file.
+        (
+            train_data_loader,  # <--- Not used for testing
+            valid_data_loader,  # <--- Not used for testing
+            test_data_loader,  
+        ) = data_loader_builder.DataLoaderBuilder(
+            hdf5_filepath           = hdf5_filepath,
+            data_split_csv_filepath = data_split_csv_filepath,
+            batch_size              = 1,
+            num_workers             = 0,
+            verbose                 = verbose,
+        ).build()
+
+        # Fetch the selected model setting to be trained.
+        model_setting = models.MODELS[model_id]
+
         # Extract model setting:
         self.model       = model_setting.model
         self.loss_func   = model_setting.loss_func
@@ -36,17 +63,15 @@ class JSWCalculator:
         self.pre_transf  = model_setting.pre_transf
         self.post_transf = model_setting.post_transf
 
-        self.test_data_loader = test_data_loader
-
-        self.verbose     = verbose
-
+        self.test_data_loader     = test_data_loader
         self.model_state_filepath = model_state_filepath
+        self.output_dir           = output_dir
+
+        self.seed    = seed
+        self.verbose = verbose
 
 
     def calculate_jsw(self):
-
-        # Testing constants
-        NUM_BATCHES = len(self.test_data_loader)
 
         # Load model state from specified .pth filepath
         self.model.load_state_dict(torch.load(self.model_state_filepath))
@@ -56,109 +81,201 @@ class JSWCalculator:
 
         dataset = self.test_data_loader.dataset
 
+        stats = []
+        errors = []
+        jsw_scores = []
+
         # Disable gradient calculation (improves performance)
         with torch.no_grad():
             # Testing loop
-            for test_step, test_batch_data in enumerate(self.test_data_loader):
+            loading_bar = range(len(dataset))
+            if not self.verbose:
+                loading_bar = tqdm.tqdm(loading_bar)
+            
+            for idx in loading_bar:
+
                 if self.verbose:
-                    print(f'{test_step + 1}/{NUM_BATCHES}')
+                    print(f'{idx + 1}/{len(dataset)}')
+                
+                sample = dataset[idx]
+                meta   = dataset.get_item_meta(idx)
                 # Load batch inputs (images) and labels (masks) to the device
-                test_inputs = test_batch_data['image']
-                test_labels = test_batch_data['mask' ]
+                input_image = sample['image'][None, :]
+                label_mask  = sample['mask' ][None, :]
 
                 # Predict labels
-                test_outputs = self.model(test_inputs)
-
+                pred_mask = self.model(input_image)
 
                 # Apply the post-prediction transform, if any
                 if self.post_transf is not None:
-                    test_outputs = [self.post_transf(item) for item in test_outputs]
+                    pred_mask = [self.post_transf(item) for item in pred_mask]
 
-                test_labels  = np.array(test_labels)
-                test_outputs = np.array(test_outputs)
+                label_mask = np.array(label_mask )
+                pred_mask  = np.array(pred_mask)
 
-                print(type(test_labels), type(test_outputs))
+                source_pixel_spacing = meta['group attributes']['source_pixel_spacing'][0]
+                pixel_spacing        = meta['group attributes']['pixel_spacing'       ][0]
 
-                source_pixel_spacing = dataset.get_item_meta(test_step)['group attributes']['source_pixel_spacing'][0]
-                pixel_spacing = dataset.get_item_meta(test_step)['group attributes']['pixel_spacing'][0]
 
-                # print(contour_mjsw (test_outputs[0], source_pixel_spacing, pixel_spacing))
-                # print(contour_mjsw (test_labels [0], source_pixel_spacing, pixel_spacing))
-                
-                # print(dtw_jsw      (test_outputs[0], source_pixel_spacing, pixel_spacing)[0])
-                # print(dtw_jsw      (test_labels [0], source_pixel_spacing, pixel_spacing)[0])
+                # Compute minJSW for label and predicted masks
+                try:
+                    stats.append([
+                        compute_min_jsw(label_mask[0], source_pixel_spacing, pixel_spacing),
+                        compute_min_jsw(pred_mask [0], source_pixel_spacing, pixel_spacing),
+                    ])
+                    jsw_scores.append([stats[-1][0][0], stats[-1][1][0]])
+                except:
+                    errors.append(f'Unexpected error: {sys.exc_info()[0]}; for sample {idx}/{len(dataset)}.')
+                    print(f'Unexpected error: {sys.exc_info()[0]}; for sample {idx}/{len(dataset)}.')
 
-                plt.subplot(1, 2, 1)
-                mJSW, minX, minY = euclidean_jsw(test_labels[0], source_pixel_spacing, pixel_spacing)
-                print(mJSW, minX, minY)
-                plt.imshow(sum((i + 1) * xs for (i, xs) in enumerate(test_labels[0])), 'magma')
-
-                plt.subplot(1, 2, 2)
-                mJSW, minX, minY = euclidean_jsw(test_outputs[0], source_pixel_spacing, pixel_spacing)
-                plt.imshow(sum((i + 1) * xs for (i, xs) in enumerate(test_outputs[0])), 'magma')
+                plt.axis('off')
+                plt.imshow(
+                    sum((idx + 1) * mask for idx, mask in enumerate(pred_mask[0] - label_mask[0])),
+                    'grey',
+                    alpha=0.5
+                )
+                plt.colorbar()
                 plt.show()
 
-        return
+                if False and self.verbose:
+                        # Plot minJSW for label mask
+                        mJSW, femur, acetabulum, femur_head_border, acetabulum_border  = stats[-1][0]
+                        print(mJSW, femur, acetabulum)
 
+                        plt.subplot(1, 2, 1)
+                        plt.axis('off')
+                        plt.title('Label Mask minJSW')
+                        # plt.scatter(femur_head_border[:, 1], femur_head_border[:, 0], marker='.')
+                        # plt.scatter(acetabulum_border[:, 1], acetabulum_border[:, 0], marker='.')
+                        plt.imshow(input_image[0][0], 'grey')
+                        plt.plot([femur[1], acetabulum[1]], [femur[0], acetabulum[0]], 'g-')
+                        plt.imshow(sum((i + 1) * xs for (i, xs) in enumerate(label_mask[0])), 'magma', alpha=0.5)
 
-class JSWCalculatorBuilder:
+                        # Plot minJSW for predicted mask
+                        mJSW, femur, acetabulum, femur_head_border, acetabulum_border = stats[-1][1]
+                        print(mJSW, femur, acetabulum)
 
-    def __init__(self,
-        hdf5_filepath: str,
-        data_split_csv_filepath: str,
-        model_id: str,
-        model_state_filepath: str,
+                        plt.subplot(1, 2, 2)
+                        plt.axis('off')
+                        plt.title('Predicted Mask minJSW')
+                        # plt.scatter(femur_head_border[:, 1], femur_head_border[:, 0], marker='.')
+                        # plt.scatter(acetabulum_border[:, 1], acetabulum_border[:, 0], marker='.')
+                        plt.imshow(input_image[0][0], 'grey')
+                        plt.plot([femur[1], acetabulum[1]], [femur[0], acetabulum[0]], 'g-')
+                        plt.imshow(sum((i + 1) * xs for (i, xs) in enumerate(pred_mask[0])), 'magma', alpha=0.5)
 
-        batch_size: int,
-        num_workers: int,
+                        plt.show()
+                    
 
-        seed: int,
-        verbose: bool,
-    ) -> None:
-        self.hdf5_filepath = hdf5_filepath
-        self.data_split_csv_filepath = data_split_csv_filepath
-        self.model_state_filepath = model_state_filepath
-        self.model_id = model_id
+        jsw_scores = np.asarray(jsw_scores)
+        jsw_diffs  = np.abs(jsw_scores[:, 0] - jsw_scores[:, 1])
+        print('Errors:', errors)
 
-        self.batch_size = batch_size
-        self.num_workers = num_workers
-
-        self.seed = seed
-        self.verbose = verbose
-
-    def build(self) -> JSWCalculator:
-        # Set seed for reproducibility purposes.
-        set_determinism(self.seed)
-
-        # Build datasets (training, validation and testing)
-        # using the split specified in the data split CSV file.
-        (
-            train_data_loader,  # <--- Not used for testing
-            valid_data_loader,  # <--- Not used for testing
-            test_data_loader,  
-        ) = data_loader_builder.DataLoaderBuilder(
-            hdf5_filepath           = self.hdf5_filepath,
-            data_split_csv_filepath = self.data_split_csv_filepath,
-            batch_size              = self.batch_size,
-            num_workers             = self.num_workers,
-            verbose                 = self.verbose,
-        ).build()
-
-        # Fetch the selected model setting to be trained.
-        model_setting = models.MODELS[self.model_id]
-
-        # Initialize model evaluator with the selected model setting.
-        return JSWCalculator(
-            model_setting        = model_setting,
-            test_data_loader     = test_data_loader,
-            model_state_filepath = self.model_state_filepath,
-            verbose              = self.verbose,
+        print(
+            f'Number of succesfully computed JSW scores: {len(jsw_diffs)}/{len(dataset)};\n'
+            f'Mean difference between real and predicted minJSW score: {np.mean(jsw_diffs)};\n'
+            f'Standard deviation of difference between real and predicted minJSW score: {np.std(jsw_diffs)}.\n'
         )
+
+        return
 
 
 class JSWException(Exception):
     def __init__(self, *args: object) -> None:
         super().__init__(*args)
+
+
+def compute_min_jsw(
+    mask: torch.tensor,
+    source_pixel_spacing: float = None,
+    pixel_spacing: float = None,
+) -> tuple[float, np.array]:
+    # If background included in the mask, omit the background mask
+    if mask.shape[0] == 4:
+        mask = mask[1:]    
+    elif mask.shape[0] != 3:
+        raise JSWException(f'Unsupported mask shape. Was: {mask.shape}.')
+    
+    def get_pixel_neighbours(array, x, y):
+        m, n = array.shape
+        neighbours = [(x - 1, y), (x + 1, y), (x, y - 1), (x, y + 1)]
+        neighbours = [(p, q) for (p, q) in neighbours if 0 <= p < m and 0 <= q < n]
+        neighbours = [(p, q) for (p, q) in neighbours if array[p, q] == 1]
+        return np.array(neighbours)
+    
+    def find_borders(femur_head, acetabulum, joint_space):
+        femur_head_border = []
+        acetabulum_border = []
+
+        for x in range(len(femur_head)):
+            for y in range(len(femur_head[0])):
+                if femur_head[x, y] == 1:
+                    neighbours = get_pixel_neighbours(joint_space, x, y)
+                    if len(neighbours) != 0:
+                        femur_head_border.append([
+                            (x + sum(neighbours[:, 0])) / (1 + len(neighbours)),
+                            (y + sum(neighbours[:, 1])) / (1 + len(neighbours)),
+                        ])
+
+        for x in range(len(acetabulum)):
+            for y in range(len(acetabulum[0])):
+                if acetabulum[x, y] == 1:
+                    neighbours = get_pixel_neighbours(joint_space, x, y)
+                    if len(neighbours) != 0:
+                        acetabulum_border.append([
+                            (x + sum(neighbours[:, 0])) / (1 + len(neighbours)),
+                            (y + sum(neighbours[:, 1])) / (1 + len(neighbours)),
+                        ])
+
+        femur_head_border = np.array(femur_head_border)
+        acetabulum_border = np.array(acetabulum_border)
+
+        return (
+            femur_head_border,
+            acetabulum_border,
+        )
+
+    (
+        femur_head_border,
+        acetabulum_border,
+    ) = find_borders(mask[0], mask[1], mask[2])
+
+    # Compute distance matrix
+    dist_matrix = np.array([
+        np.sqrt(((p - acetabulum_border) ** 2).sum(axis=-1)) for p in femur_head_border
+    ])
+
+    # Scale distances to real (source) pixel spacing
+    dist_matrix *= (source_pixel_spacing / pixel_spacing)
+
+    # Get minJSW:
+    m, n = dist_matrix.shape
+    idx = np.argmin(dist_matrix)
+    minX, minY = idx // n, idx % n
+    mJSW = dist_matrix[minX, minY]
+    return (
+        mJSW,
+        femur_head_border[minX],
+        acetabulum_border[minY],
+        femur_head_border,
+        acetabulum_border,
+    )
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -231,8 +348,7 @@ def euclidean_jsw(
     idx = np.argmin(dist_matrix)
     minX, minY = idx // n, idx % n
     mJSW = dist_matrix[minX, minY]
-    return mJSW, minX, minY
-
+    return mJSW, seqA[minX], seqB[minY]
 
 
 def dtw_jsw(
@@ -333,24 +449,3 @@ def _plot_dtw_results(query, reference, alignment, jsw_array):
     plt.plot(list(range(len(jsw_array))), jsw_array, 'o-')
 
     plt.show()
-
-
-
-
-def main():
-
-    jsw_calculator = JSWCalculatorBuilder(
-        hdf5_filepath = './all_with_bg.h5',
-        data_split_csv_filepath = './data_split.csv',
-        model_id = '1',
-        model_state_filepath = './my_runs/training_v2_08-06-2024_00-00/results/best_metric_model.pth', # './my_runs/training_v1_05-06-2024_20-00/best_metric_model.pth',
-        batch_size = 1,
-        num_workers = 0,
-        seed = 42,
-        verbose = True,
-    ).build()
-
-    jsw_calculator.calculate_jsw()
-
-if __name__ == '__main__':
-    main()
