@@ -1,47 +1,9 @@
 '''
-How to run:
-* open a bash terminal;
-* execute the following command in the terminal:
-```
-python ./dicom_preprocessor/dicom_preprocessor.py \
-    --input "./data" \
-    --output "./output.h5" \
-    --percentile-normalization 5 95 \
-    --target-pixel-spacing 0.9 0.9 \
-    --target-pixel-array-shape 512 512 \
-    --verbose
-```
+Preprocessor module main gateway.
 '''
 import argparse
 
 import dicom_preprocessor as dp
-
-
-def main():
-    args = get_args()
-
-    if args.target_pixel_spacing is not None:
-        args.target_pixel_spacing = tuple(args.target_pixel_spacing)
-
-    if args.target_pixel_array_shape is not None:
-        args.target_pixel_array_shape = tuple(args.target_pixel_array_shape)
-
-    if args.percentile_normalization is not None:
-        args.percentile_normalization = tuple(args.percentile_normalization)
-
-    # Set preprocessor parameters
-    preprocessor = dp.DicomPreprocessor(
-        data_dir_path            = args.input_dir,
-        hdf5_filepath            = args.output_hdf5,
-        target_pixel_spacing     = args.target_pixel_spacing,
-        target_pixel_array_shape = args.target_pixel_array_shape,
-        percentile_normalization = args.percentile_normalization,
-        include_background_mask  = args.include_background_mask,
-        samples_limit            = args.limit,
-        verbose                  = args.verbose,
-    )
-
-    preprocessor.preprocess()
 
 
 def get_args() -> argparse.Namespace:
@@ -93,17 +55,40 @@ def get_args() -> argparse.Namespace:
         help='whether to include the background binary mask in the combined mask',
     )
     parser.add_argument(
-        '--limit',
-        type=int,
-        default=None,
-        help='limit the number of samples to be preprocessed',
-    )
-    parser.add_argument(
         '--verbose',
         action='store_true',
     )
 
     return parser.parse_args()
+
+
+def main() -> None:
+    args = get_args()
+
+    if args.target_pixel_spacing is not None:
+        args.target_pixel_spacing = tuple(args.target_pixel_spacing)
+
+    if args.target_pixel_array_shape is not None:
+        args.target_pixel_array_shape = tuple(args.target_pixel_array_shape)
+
+    if args.percentile_normalization is not None:
+        args.percentile_normalization = tuple(args.percentile_normalization)
+
+    # Set preprocessor parameters
+    preprocessor = dp.Preprocessor(
+        data_dir_path            = args.input_dir,
+        hdf5_filepath            = args.output_hdf5,
+        target_pixel_spacing     = args.target_pixel_spacing,
+        target_pixel_array_shape = args.target_pixel_array_shape,
+        percentile_normalization = args.percentile_normalization,
+        include_background_mask  = args.include_background_mask,
+        verbose                  = args.verbose,
+    )
+
+    # Start preprocessing
+    preprocessor.preprocess()
+
+    return
 
 
 if __name__ == '__main__':

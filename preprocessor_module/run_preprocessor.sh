@@ -1,8 +1,8 @@
 #!/bin/bash
 
-#SBATCH --job-name="preprocessing"
+#SBATCH --job-name="data preprocessing"
 #SBATCH --partition=compute
-#SBATCH --time=04:00:00
+#SBATCH --time=23:59:59
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=16
 #SBATCH --mem-per-cpu=2GB
@@ -17,12 +17,12 @@ module load py-scikit-learn
 module load py-tqdm
 
 
-python -m pip install --user -r /scratch/dileana/research-project/requirements.txt
+python -m pip install --user -r /absolute/path/to/research-project/requirements.txt
 
 
-srun python /scratch/dileana/research-project/preprocessor_module/main.py \
-            --input-dir "/scratch/dileana/oa2024/shared/data" \
-            --output-hdf5 "/scratch/dileana/research-project/all_bg.h5" \
+srun python /absolute/path/to/research-project/preprocessor_module/main.py \
+            --input-dir "/absolute/path/to/research-project/data" \
+            --output-hdf5 "absolute/path/to/research-project/all_bg.h5" \
             --percentile-normalization 5 95 \
             --target-pixel-spacing 0.9 0.9 \
             --target-pixel-array-shape 512 512 \
